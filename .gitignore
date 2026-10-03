@@ -1,0 +1,8 @@
+# people will build the project themselves
+build/
+
+# these files are for personal testing
+src/
+
+assets/*
+!assets/ADD_ASSETS_HERE.txt
