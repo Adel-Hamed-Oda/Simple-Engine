@@ -5,11 +5,10 @@
 #include <glm/glm.hpp>
 
 #include <fstream>
-#include <sstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <unordered_map>
-#include <utility>
 
 class Shader
 {
@@ -17,25 +16,19 @@ public:
     unsigned int ID = 0;
 
     Shader() = default;
-    Shader(const char* shaderPath)
+
+    Shader(
+        const char* vertexPath,
+        const char* fragmentPath,
+        const std::string& shaderName = ""
+    )
     {
-        std::string shaderCode = ReadFile(shaderPath);
+        std::string vertexCode = ReadFile(vertexPath);
+        std::string fragmentCode = ReadFile(fragmentPath);
 
-        if (shaderCode.empty())
+        // Either file failed to load.
+        if (vertexCode.empty() || fragmentCode.empty())
             return;
-
-        std::string vertexCode;
-        std::string fragmentCode;
-
-        if (!ParseShaderFile(shaderCode, vertexCode, fragmentCode))
-        {
-            std::cerr
-                << "ERROR::SHADER::INVALID_SHADER_FILE: "
-                << shaderPath
-                << std::endl;
-
-            return;
-        }
 
         // Compile vertex shader
         unsigned int vertex = CompileShader(
@@ -69,7 +62,11 @@ public:
         int success;
         char infoLog[512];
 
-        glGetProgramiv(ID, GL_LINK_STATUS, &success);
+        glGetProgramiv(
+            ID,
+            GL_LINK_STATUS,
+            &success
+        );
 
         if (!success)
         {
@@ -89,16 +86,20 @@ public:
             ID = 0;
         }
 
-		name = shaderPath;
+        if (shaderName.empty())
+            name = vertexPath;
+        else
+            name = shaderName;
 
         // Shaders are now linked into the program.
         glDeleteShader(vertex);
         glDeleteShader(fragment);
     }
-	const std::string& GetName() const
-	{
-		return name;
-	}
+
+    const std::string& GetName() const
+    {
+        return name;
+    }
 
     void use() const
     {
@@ -250,51 +251,6 @@ private:
         buffer << file.rdbuf();
 
         return buffer.str();
-    }
-
-    static bool ParseShaderFile(
-        const std::string& source,
-        std::string& vertexCode,
-        std::string& fragmentCode
-    )
-    {
-        const std::string vertexMarker = "#type vertex";
-        const std::string fragmentMarker = "#type fragment";
-
-        size_t vertexPosition = source.find(vertexMarker);
-        size_t fragmentPosition = source.find(fragmentMarker);
-
-        // Both sections must exist.
-        if (vertexPosition == std::string::npos ||
-            fragmentPosition == std::string::npos)
-        {
-            return false;
-        }
-
-        // Vertex section must come before fragment section.
-        if (vertexPosition > fragmentPosition)
-        {
-            return false;
-        }
-
-        // Start after "#type vertex"
-        size_t vertexStart =
-            vertexPosition + vertexMarker.length();
-
-        // Everything between the markers is the vertex shader.
-        vertexCode = source.substr(
-            vertexStart,
-            fragmentPosition - vertexStart
-        );
-
-        // Everything after "#type fragment" is the fragment shader.
-        size_t fragmentStart =
-            fragmentPosition + fragmentMarker.length();
-
-        fragmentCode = source.substr(fragmentStart);
-
-        return !vertexCode.empty() &&
-            !fragmentCode.empty();
     }
 
     static unsigned int CompileShader(

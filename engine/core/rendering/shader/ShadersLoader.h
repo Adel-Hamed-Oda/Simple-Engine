@@ -1,9 +1,13 @@
 #pragma once
+
 #include "Shader.h"
+
+#include <filesystem>
 #include <iostream>
 #include <map>
+#include <set>
+#include <stdexcept>
 #include <string>
-#include <filesystem>
 
 namespace fs = std::filesystem;
 
@@ -27,7 +31,11 @@ public:
 
         if (it == shaders.end())
         {
-            std::cerr << "ERROR::SHADER::NOT_FOUND: " << shaderName << std::endl;
+            std::cerr
+                << "ERROR::SHADER::NOT_FOUND: "
+                << shaderName
+                << std::endl;
+
             return nullptr;
         }
 
@@ -38,48 +46,131 @@ private:
     inline static std::map<std::string, Shader> shaders;
     inline static bool initialized = false;
 
-    static bool InsertShader(const std::string& shaderName, const std::string& filepath)
+    static bool InsertShader(
+        const std::string& shaderName,
+        const fs::path& vertexPath,
+        const fs::path& fragmentPath
+    )
     {
-        Shader shader(filepath.c_str());
+        Shader shader(
+            vertexPath.string().c_str(),
+            fragmentPath.string().c_str(),
+            shaderName
+        );
 
         if (shader.ID == 0)
         {
-            std::cerr << "Failed to load shader: " << shaderName << " at path " << filepath << std::endl;
+            std::cerr
+                << "Failed to load shader: "
+                << shaderName
+                << std::endl;
+
             return false;
         }
 
-        shaders.emplace(shaderName, std::move(shader));
+        shaders.emplace(
+            shaderName,
+            std::move(shader)
+        );
+
         return true;
     }
 
     static bool SetupShaders()
     {
-        const std::string shadersDir = CONFIG::RENDERING::SHADERS_DIR;
+        const fs::path shadersDir =
+            CONFIG::RENDERING::SHADERS_DIR;
 
-        if (!fs::exists(shadersDir) || !fs::is_directory(shadersDir))
+        if (!fs::exists(shadersDir) ||
+            !fs::is_directory(shadersDir))
         {
-            std::cerr << "Shaders directory not found: " << shadersDir << std::endl;
+            std::cerr
+                << "Shaders directory not found: "
+                << shadersDir
+                << std::endl;
+
             return false;
         }
 
-        // Recursively iterate through all files and subdirectories
-        for (const auto& entry : fs::recursive_directory_iterator(shadersDir))
+        std::map<std::string, fs::path> vertexFiles;
+        std::map<std::string, fs::path> fragmentFiles;
+
+        for (const auto& entry :
+             fs::recursive_directory_iterator(shadersDir))
         {
-            if (entry.is_regular_file() && entry.path().extension() == ".glsl")
+            if (!entry.is_regular_file())
+                continue;
+
+            const fs::path path = entry.path();
+            const std::string extension =
+                path.extension().string();
+
+            std::string shaderName =
+                fs::relative(path, shadersDir)
+                    .replace_extension("")
+                    .generic_string();
+
+            if (extension == ".vert")
             {
-                // Option A: Use filename without extension as key (e.g., "Default" for assets/Shaders/UI/Default.glsl)
-                std::string shaderName = entry.path().stem().string();
+                vertexFiles[shaderName] = path;
+            }
+            else if (extension == ".frag")
+            {
+                fragmentFiles[shaderName] = path;
+            }
+        }
 
-                // Option B (Alternative): Use relative subpath without extension if you want to prevent name collisions across folders
-                // e.g., "UI/Default" instead of "Default"
-                // std::string shaderName = fs::relative(entry.path(), shadersDir).replace_extension("").generic_string();
+        std::set<std::string> shaderNames;
 
-                std::string fullPath = entry.path().string();
+        for (const auto& [name, path] : vertexFiles)
+            shaderNames.insert(name);
+        for (const auto& [name, path] : fragmentFiles)
+            shaderNames.insert(name);
 
-                if (!InsertShader(shaderName, fullPath))
-                {
-                    std::cerr << "Warning: Failed to auto-register shader " << shaderName << std::endl;
-                }
+        if (shaderNames.empty())
+        {
+            std::cerr
+                << "No shader files found in: "
+                << shadersDir
+                << std::endl;
+
+            return false;
+        }
+
+        for (const std::string& shaderName : shaderNames)
+        {
+            auto vertexIt = vertexFiles.find(shaderName);
+            auto fragmentIt = fragmentFiles.find(shaderName);
+
+            // Missing .vert
+            if (vertexIt == vertexFiles.end())
+            {
+                throw std::runtime_error(
+                    "ERROR::SHADER::MISSING_VERTEX_FILE: " +
+                    shaderName +
+                    ".vert"
+                );
+            }
+
+            // Missing .frag
+            if (fragmentIt == fragmentFiles.end())
+            {
+                throw std::runtime_error(
+                    "ERROR::SHADER::MISSING_FRAGMENT_FILE: " +
+                    shaderName +
+                    ".frag"
+                );
+            }
+
+            if (!InsertShader(
+                    shaderName,
+                    vertexIt->second,
+                    fragmentIt->second))
+            {
+                std::cerr
+                    << "Warning: Failed to auto-register shader "
+                    << shaderName
+                    << std::endl;
             }
         }
 
