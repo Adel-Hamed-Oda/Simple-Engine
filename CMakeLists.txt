@@ -18,10 +18,10 @@ target_link_libraries(${APPLICATION_NAME} PRIVATE Engine)
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
     add_custom_command(
-        TARGET Engine POST_BUILD
+        TARGET ${APPLICATION_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${CMAKE_SOURCE_DIR}/assets"
-                "$<TARGET_FILE_DIR:Engine>/assets"
+                "$<TARGET_FILE_DIR:${APPLICATION_NAME}>/assets"
         COMMENT "Copying assets folder to output directory..."
     )
 endif()
