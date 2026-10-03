@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 
 #include "Collider.h"
-#include "../../main/transform/Transform.h"
+#include "../../core/transform/Transform.h"
 
 class BoxCollider : public Collider
 {

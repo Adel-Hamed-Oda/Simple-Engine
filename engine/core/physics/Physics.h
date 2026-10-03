@@ -3,7 +3,8 @@
 #include <glm/glm.hpp>
 
 #include "../../Config.h"
-#include "../../core/EngineTime.h"
+#include "../statics/EngineTime.h"
+#include "../statics/PublicDomain.h"
 #include "../../components/__Components__.h"
 
 class Physics

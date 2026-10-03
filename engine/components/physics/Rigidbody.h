@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 
 #include "../Component.h"
-#include "../../main/transform/Transform.h"
+#include "../../core/transform/Transform.h"
 
 class Rigidbody : public Component
 {

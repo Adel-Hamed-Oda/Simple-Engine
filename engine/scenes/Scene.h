@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 
-#include "../main/gameobject/GameObject.h"
+#include "../core/gameobject/GameObject.h"
 
 class Scene
 {

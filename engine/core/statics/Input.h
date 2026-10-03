@@ -5,29 +5,22 @@
 
 #include <glm/glm.hpp>
 
-#include "../core/PublicDomain.h"
+#include "PublicDomain.h"
 
-namespace Input
+class Input
 {
-    // ---------------------------------------------------------
-    // Mouse
-    // ---------------------------------------------------------
+public:
+    inline static glm::vec2 MousePosition{ 0.0f, 0.0f };
+    inline static glm::vec2 MouseDelta{ 0.0f, 0.0f };
 
-    inline glm::vec2 MousePosition{ 0.0f, 0.0f };
-    inline glm::vec2 MouseDelta{ 0.0f, 0.0f };
-
-    // ---------------------------------------------------------
-    // Keyboard
-    // ---------------------------------------------------------
-
-    inline bool CurrentKeys[GLFW_KEY_LAST + 1]{};
-    inline bool PreviousKeys[GLFW_KEY_LAST + 1]{};
+    inline static bool CurrentKeys[GLFW_KEY_LAST + 1]{};
+    inline static bool PreviousKeys[GLFW_KEY_LAST + 1]{};
 
     // ---------------------------------------------------------
     // Setup
     // ---------------------------------------------------------
 
-    inline void Setup()
+    static void Setup()
     {
         if (!PublicDomain::CurrentWindow)
             return;
@@ -47,7 +40,7 @@ namespace Input
         );
     }
 
-    inline void Update()
+    static void Update()
     {
         if (!PublicDomain::CurrentWindow)
             return;
@@ -61,7 +54,7 @@ namespace Input
         }
     }
 
-    inline void EndFrame()
+    static void EndFrame()
     {
         MouseDelta = glm::vec2(0.0f);
     }
@@ -70,7 +63,7 @@ namespace Input
     // Keyboard
     // ---------------------------------------------------------
 
-    inline bool GetKey(int key)
+    static bool GetKey(int key)
     {
         if (key < 0 || key > GLFW_KEY_LAST)
             return false;
@@ -78,7 +71,7 @@ namespace Input
         return CurrentKeys[key];
     }
 
-    inline bool GetKeyDown(int key)
+    static bool GetKeyDown(int key)
     {
         if (key < 0 || key > GLFW_KEY_LAST)
             return false;
@@ -86,7 +79,7 @@ namespace Input
         return CurrentKeys[key] && !PreviousKeys[key];
     }
 
-    inline bool GetKeyUp(int key)
+    static bool GetKeyUp(int key)
     {
         if (key < 0 || key > GLFW_KEY_LAST)
             return false;
@@ -95,10 +88,10 @@ namespace Input
     }
 
     // ---------------------------------------------------------
-    // Mouse buttons
+    // Mouse
     // ---------------------------------------------------------
 
-    inline bool GetMouseButtonDown(int button)
+    static bool GetMouseButtonDown(int button)
     {
         if (!PublicDomain::CurrentWindow)
             return false;
@@ -109,7 +102,7 @@ namespace Input
         ) == GLFW_PRESS;
     }
 
-    inline bool GetMouseButtonUp(int button)
+    static bool GetMouseButtonUp(int button)
     {
         if (!PublicDomain::CurrentWindow)
             return false;
@@ -119,4 +112,4 @@ namespace Input
             button
         ) == GLFW_RELEASE;
     }
-}
+};
