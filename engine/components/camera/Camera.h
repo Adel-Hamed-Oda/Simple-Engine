@@ -3,8 +3,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include "../behaviour/Behaviour.h"
-#include "../../main/transform/Transform.h"
-#include "../../core/EngineTime.h"
+#include "../../core/transform/Transform.h"
+#include "../../core/statics/EngineTime.h"
 
 // ------------------------------------------------------------------------
 // Constants

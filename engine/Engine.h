@@ -8,7 +8,6 @@
 #include "components/__Components__.h"
 #include "core/__Core__.h"
 #include "scenes/__Scenes__.h"
-#include "main/__Main__.h"
 #include "Config.h"
 
 class Engine

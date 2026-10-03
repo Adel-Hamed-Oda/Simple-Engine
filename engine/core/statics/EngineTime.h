@@ -2,15 +2,16 @@
 
 #include <vector>
 
-namespace Time
+class Time
 {
-    inline int frames = 0;
-    inline float time = 0.0f;
-    inline float deltaTime = 0.0f;
-    inline float FPS = 0.0f;
-    inline float immediateFPS = 0.0f;
+public:
+    inline static int frames = 0;
+    inline static float time = 0.0f;
+    inline static float deltaTime = 0.0f;
+    inline static float FPS = 0.0f;
+    inline static float immediateFPS = 0.0f;
 
-    inline void Update(float* lastFrameTime, float currentTime)
+    static void Update(float* lastFrameTime, float currentTime)
     {
         float currentFrameTime = static_cast<float>(currentTime);
         Time::frames++;

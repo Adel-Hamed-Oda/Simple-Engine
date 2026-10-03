@@ -6,7 +6,7 @@
 #include <iostream>
 #include <string>
 
-#include "../../../core/PublicDomain.h"
+#include "../../statics/PublicDomain.h"
 #include "../../../components/camera/Camera.h"
 #include "../../transform/Transform.h"
 #include "../shader/Shader.h"

@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "../Config.h"
-#include "../main/rendering/Window.h"
+#include "../../Config.h"
+#include "../rendering/Window.h"
 
 namespace PublicDomain
 {
