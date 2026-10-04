@@ -59,7 +59,6 @@ public:
 	{
 		if (projectionType == ProjectionType::Orthographic)
 		{
-			float orthoScale = 10.0f; // You can adjust this value to change the orthographic size
 			return glm::ortho(-orthoScale * aspectRatio, orthoScale * aspectRatio, -orthoScale, orthoScale, nearPlane, farPlane);
 		}
 		else
