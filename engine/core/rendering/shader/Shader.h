@@ -72,7 +72,7 @@ public:
     }
 
     // Creates a shader with explicit vertex and fragment paths and stores it in the lookup map.
-    static Shader* Create(const std::string& vertexPath, const std::string& fragmentPath, const std::string& name = "")
+    static Shader* Create(const std::string& vertexPath, const std::string& fragmentPath, const std::string& name)
     {
         if (shaders.find(name) != shaders.end())
         {

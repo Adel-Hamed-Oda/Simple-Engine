@@ -34,6 +34,7 @@ namespace CONFIG
         constexpr bool ENABLE_VSYNC = true;
 
         constexpr const char* SHADERS_DIR = "assets/";
+        constexpr const char* TEXTURES_DIR = "assets/";
     }
 
     namespace LIGHTING
