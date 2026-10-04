@@ -13,7 +13,7 @@ add_subdirectory(external/glm)
 
 # 4. Create your Engine as a static library
 add_library(Engine STATIC
-    Glad.cpp
+    IDK.cpp
     Engine.h
     Config.h
 )
