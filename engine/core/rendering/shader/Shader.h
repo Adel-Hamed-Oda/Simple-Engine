@@ -17,7 +17,7 @@ public:
 
     Shader() = default;
 
-    Shader(const std::string& vertexPath, const std::string& fragmentPath, const std::string& shaderName = "")
+    Shader(const std::string& vertexPath, const std::string& fragmentPath)
     {
         std::string vertexCode = ReadFile(vertexPath.c_str());
         std::string fragmentCode = ReadFile(fragmentPath.c_str());
@@ -55,8 +55,6 @@ public:
             return;
         }
 
-        name = shaderName.empty() ? vertexPath : shaderName;
-
         glDeleteShader(vertex);
         glDeleteShader(fragment);
     }
@@ -67,15 +65,22 @@ public:
 
     // Creates a shader from a base path (e.g. "shaders/default" -> "shaders/default.vert" & "shaders/default.frag")
     // and stores it in the lookup map.
-    static Shader* Create(const std::string& name, const std::string& path)
+    static Shader* Create(const std::string& path, const std::string& name = "")
     {
-        return Create(name, path + ".vert", path + ".frag");
+        std::string name_t = name.empty() ? path : name;
+        return Create(path + ".vert", path + ".frag", name_t);
     }
 
     // Creates a shader with explicit vertex and fragment paths and stores it in the lookup map.
-    static Shader* Create(const std::string& name, const std::string& vertexPath, const std::string& fragmentPath)
+    static Shader* Create(const std::string& vertexPath, const std::string& fragmentPath, const std::string& name = "")
     {
-        Shader shader(vertexPath, fragmentPath, name);
+        if (shaders.find(name) != shaders.end())
+        {
+            std::cerr << "ERROR::SHADER::ALREADY_EXISTS: " << name << std::endl;
+            return &shaders[name];
+        }
+        
+        Shader shader(vertexPath, fragmentPath);
         if (shader.ID == 0)
         {
             std::cerr << "ERROR::SHADER::CREATION_FAILED: " << name << std::endl;
