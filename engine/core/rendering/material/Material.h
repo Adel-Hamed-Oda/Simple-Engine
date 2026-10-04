@@ -10,7 +10,6 @@
 #include "../../../components/camera/Camera.h"
 #include "../../transform/Transform.h"
 #include "../shader/Shader.h"
-#include "../shader/ShadersLoader.h"
 
 // A Material is shared, per-shader *data* (colors, shininess, ...).
 // It is NOT a Component: it isn't attached to one GameObject, so it has no
@@ -22,7 +21,7 @@ public:
 
 	explicit Material(const std::string& shaderName)
 	{
-		shader = ShadersLoader::GetShader(shaderName);
+		shader = Shader::Get(shaderName);
 		if (!shader)
 		{
 			std::cerr
@@ -61,6 +60,8 @@ public:
 	virtual void ApplyMaterial() = 0;
 
 private:
+	// This will probably be changed later once each window has it's own camera, but for now
+	// we will be doing this ourselves
 	static float GetAspectRatio()
 	{
 		int width = 0, height = 0;
