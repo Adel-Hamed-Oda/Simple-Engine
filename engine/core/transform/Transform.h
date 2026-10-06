@@ -9,6 +9,7 @@ class Transform
 {
 public:
     GameObject* owner = nullptr;
+    Transform* parent = nullptr;
 
     glm::vec3 position;
     glm::vec3 rotation;
@@ -72,6 +73,10 @@ public:
             glm::vec3(0.0f, 0.0f, 1.0f)
         );
 
+        if (parent)
+        {
+            rotationMatrix = parent->GetRotationMatrix() * rotationMatrix;
+        }
         return rotationMatrix;
     }
 
@@ -88,6 +93,10 @@ public:
         // Scale
         model = glm::scale(model, scale);
 
+        if (parent)
+        {
+            model = parent->GetModelMatrix() * model;
+        }
         return model;
     }
 };
