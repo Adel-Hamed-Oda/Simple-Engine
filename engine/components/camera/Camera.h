@@ -10,17 +10,25 @@
 // Constants
 // ------------------------------------------------------------------------
 
+enum class ProjectionType
+{
+	Perspective,
+	Orthographic
+};
+
 class Camera : public Behaviour
 {
 public:
 	inline static Camera* mainCamera = nullptr;
 
-	float fov;
-	float nearPlane;
-	float farPlane;
-
-	Camera(float fov = 45.0f, float nearPlane = 0.1f, float farPlane = 1000.0f)
-		: fov(fov), nearPlane(nearPlane), farPlane(farPlane)
+	ProjectionType projectionType;
+	float fov = 45.0f;
+	float nearPlane = 0.1f;
+	float farPlane = 1000.0f;
+	float orthoScale = 1.0f;
+	
+	Camera(ProjectionType projectionType = ProjectionType::Perspective)
+		: projectionType(projectionType)
 	{
 		if (!mainCamera)
 			mainCamera = this;
@@ -49,6 +57,13 @@ public:
 
 	glm::mat4 GetProjectionMatrix(float aspectRatio)
 	{
-		return glm::perspective(glm::radians(fov), aspectRatio, nearPlane, farPlane);
+		if (projectionType == ProjectionType::Orthographic)
+		{
+			return glm::ortho(-orthoScale * aspectRatio, orthoScale * aspectRatio, -orthoScale, orthoScale, nearPlane, farPlane);
+		}
+		else
+		{
+			return glm::perspective(glm::radians(fov), aspectRatio, nearPlane, farPlane);
+		}
 	}
 };

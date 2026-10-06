@@ -13,7 +13,7 @@ add_subdirectory(external/glm)
 
 # 4. Create your Engine as a static library
 add_library(Engine STATIC
-    Glad.cpp
+    IDK.cpp
     Engine.h
     Config.h
 )
@@ -27,6 +27,7 @@ target_include_directories(Engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/scenes
     ${CMAKE_CURRENT_SOURCE_DIR}/external/glad/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/stb
 )
 
 # 6. Find system OpenGL natively
