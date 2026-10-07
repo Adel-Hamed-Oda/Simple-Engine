@@ -75,7 +75,7 @@ private:
 
         Rendering::SetupRendering();
         Input::Setup();
-        Audio::Init();
+        AudioSource::Init();
         if (!CONFIG::ENGINE::ENABLE_DEBUG)
         {
             Debug::enabled = false;
@@ -104,9 +104,9 @@ private:
                 GL_DEPTH_BUFFER_BIT
             );
 
+
             static float lastFrameTime = 0.0f;
             Time::Update(&lastFrameTime, static_cast<float>(glfwGetTime()));
-
             Input::Update();
             Physics::Update();
             SceneManager::Update();
@@ -128,6 +128,7 @@ private:
         }
 
         SceneManager::UnloadScene();
+        AudioSource::Shutdown();
         glfwTerminate();
 
         return true;
