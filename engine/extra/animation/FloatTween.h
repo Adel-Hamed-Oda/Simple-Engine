@@ -7,26 +7,53 @@
 class FloatTween : public Tween
 {
 public:
-    FloatTween(float* value, float start, float end, float duration, std::function<float(float)> easingFunction = nullptr, std::function<void()> onComplete = nullptr)
-        : value(value), startValue(start), endValue(end), duration(duration), easingFunction(easingFunction), onComplete(onComplete) 
+    FloatTween() : Tween() {}
+    ~FloatTween() override = default;
+
+    static FloatTween* Create(
+        float* value,
+        float start,
+        float end,
+        float duration,
+        std::function<float(float)> easingFunction = nullptr,
+        std::function<void()> onComplete = nullptr
+    )
     {
-        activeTweens.push_back(this);
+        FloatTween* tween = new FloatTween();
+        tween->value = value;
+        tween->startValue = start;
+        tween->endValue = end;
+        tween->duration = duration;
+        tween->easingFunction = easingFunction;
+        tween->onComplete = onComplete;
+
+        Tween::activeTweens.push_back(tween);
+
+        return tween;
     }
-    ~FloatTween() = default;
 
     void Update() override
     {
-        while (elapsedTime < duration)
-        {
-            *value = startValue + (endValue - startValue) * GetT();
+        elapsedTime += Time::deltaTime;
 
-            elapsedTime += Time::deltaTime;
-        }
+        *value = startValue + (endValue - startValue) * GetT();
 
-        if (onComplete)
+        if (Finished() && onComplete)
         {
             onComplete();
         }
+    }
+
+    const float GetT()
+    {
+        float t = std::clamp(elapsedTime / duration, 0.0f, 1.0f);
+
+        if (easingFunction)
+        {
+            return easingFunction(t);
+        }
+
+        return t;
     }
 
     bool Finished() override
@@ -36,20 +63,13 @@ public:
 
 private:
     float* value;
+
     float startValue;
     float endValue;
-    float elapsedTime = 0;
+
+    float elapsedTime = 0.0f;
     float duration;
 
     std::function<float(float)> easingFunction;
     std::function<void()> onComplete;
-
-    float GetT() 
-    {
-        if (easingFunction)
-        {
-            return easingFunction(elapsedTime / duration);
-        }
-        return elapsedTime / duration;
-    }
 };

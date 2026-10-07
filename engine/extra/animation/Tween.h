@@ -7,11 +7,15 @@ class Tween
 public:
     inline static std::vector<Tween*> activeTweens;
 
-    static void Update()
+    Tween() = default;
+    virtual ~Tween() = default;
+
+    static void UpdateAll()
     {
         for (auto it = activeTweens.begin(); it != activeTweens.end(); )
         {
             Tween* tween = *it;
+
             tween->Update();
 
             if (tween->Finished())
@@ -26,6 +30,6 @@ public:
         }
     }
 
-    virtual void Update() = 0;
-    virtual bool Finished() = 0;
+    virtual void Update() {}
+    virtual bool Finished() { return true; }
 };
