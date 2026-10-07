@@ -74,14 +74,12 @@ private:
         glfwSetInputMode(PublicDomain::CurrentWindow->GetGLFWWindow(), GLFW_CURSOR, CONFIG::RENDERING::HIDE_CURSOR ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL); // IDK where to put this tbh
 
         Rendering::SetupRendering();
-
         Input::Setup();
-
+        AudioSource::Init();
         if (!CONFIG::ENGINE::ENABLE_DEBUG)
         {
             Debug::enabled = false;
         }
-
         if (CONFIG::ENGINE::LOAD_FIRST_SCENE)
         {
             SceneManager::LoadScene(0);
@@ -106,9 +104,9 @@ private:
                 GL_DEPTH_BUFFER_BIT
             );
 
+
             static float lastFrameTime = 0.0f;
             Time::Update(&lastFrameTime, static_cast<float>(glfwGetTime()));
-
             Input::Update();
             Physics::Update();
             SceneManager::Update();
@@ -130,6 +128,7 @@ private:
         }
 
         SceneManager::UnloadScene();
+        AudioSource::Shutdown();
         glfwTerminate();
 
         return true;

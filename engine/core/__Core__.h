@@ -1,6 +1,8 @@
 #pragma once
 
 
+#include "audio/AudioSource.h"
+
 #include "gameobject/GameObject.h"
 
 #include "physics/Physics.h"
