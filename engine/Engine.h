@@ -112,6 +112,7 @@ private:
             Input::Update();
             Physics::Update();
             SceneManager::Update();
+            Tween::Update();
 
             Scene* scene = SceneManager::GetCurrentScene();
             if (scene)

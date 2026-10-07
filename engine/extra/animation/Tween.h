@@ -7,7 +7,7 @@ class Tween
 public:
     inline static std::vector<Tween*> activeTweens;
 
-    static void UpdateAll()
+    static void Update()
     {
         for (auto it = activeTweens.begin(); it != activeTweens.end(); )
         {
