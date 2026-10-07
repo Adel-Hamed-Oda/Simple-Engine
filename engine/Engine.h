@@ -74,14 +74,12 @@ private:
         glfwSetInputMode(PublicDomain::CurrentWindow->GetGLFWWindow(), GLFW_CURSOR, CONFIG::RENDERING::HIDE_CURSOR ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL); // IDK where to put this tbh
 
         Rendering::SetupRendering();
-
         Input::Setup();
-
+        Audio::Init();
         if (!CONFIG::ENGINE::ENABLE_DEBUG)
         {
             Debug::enabled = false;
         }
-
         if (CONFIG::ENGINE::LOAD_FIRST_SCENE)
         {
             SceneManager::LoadScene(0);
