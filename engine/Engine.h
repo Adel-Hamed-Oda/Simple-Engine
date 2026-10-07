@@ -111,6 +111,7 @@ private:
             Physics::Update();
             SceneManager::Update();
             Tween::UpdateAll();
+            Timer::UpdateAll();
 
             Scene* scene = SceneManager::GetCurrentScene();
             if (scene)
