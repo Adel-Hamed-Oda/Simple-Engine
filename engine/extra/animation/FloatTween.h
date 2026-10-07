@@ -8,7 +8,10 @@ class FloatTween : public Tween
 {
 public:
     FloatTween(float* value, float start, float end, float duration, std::function<float(float)> easingFunction = nullptr, std::function<void()> onComplete = nullptr)
-        : value(value), startValue(start), endValue(end), duration(duration), easingFunction(easingFunction), onComplete(onComplete) {}
+        : value(value), startValue(start), endValue(end), duration(duration), easingFunction(easingFunction), onComplete(onComplete) 
+    {
+        activeTweens.push_back(this);
+    }
     ~FloatTween() = default;
 
     void Update() override
