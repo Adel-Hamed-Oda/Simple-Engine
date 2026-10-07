@@ -42,7 +42,7 @@ public:
     Texture() = default;
     Texture(const std::string& shaderPath)
     {
-        std::string fullPath = CONFIG::RENDERING::TEXTURES_DIR + shaderPath;
+        std::string fullPath = CONFIG::DIRECTORY::TEXTURES + shaderPath;
 
         stbi_set_flip_vertically_on_load(true); // Flip the image vertically on load
         int width, height, nrChannels;

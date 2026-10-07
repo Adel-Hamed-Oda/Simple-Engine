@@ -32,9 +32,6 @@ namespace CONFIG
 
         constexpr bool HIDE_CURSOR = true;
         constexpr bool ENABLE_VSYNC = true;
-
-        constexpr const char* SHADERS_DIR = "assets/";
-        constexpr const char* TEXTURES_DIR = "assets/";
     }
 
     namespace LIGHTING
@@ -58,5 +55,13 @@ namespace CONFIG
 
         constexpr int WIDTH = 1000;
         constexpr int HEIGHT = 1000;
+    }
+
+    namespace DIRECTORY
+    {
+        constexpr const char* ASSETS = "assets/";
+        constexpr const char* SHADERS = "assets/";
+        constexpr const char* TEXTURES = "assets/";
+        constexpr const char* AUDIO = "assets/";
     }
 }

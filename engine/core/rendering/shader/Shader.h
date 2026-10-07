@@ -186,7 +186,7 @@ private:
 
     static std::string ReadFile(const char* filepath)
     {
-        std::string fullPath = CONFIG::RENDERING::SHADERS_DIR + std::string(filepath);
+        std::string fullPath = CONFIG::DIRECTORY::SHADERS + std::string(filepath);
 
         std::ifstream file(fullPath, std::ios::in | std::ios::binary);
         if (!file.is_open())
