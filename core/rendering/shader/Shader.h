@@ -4,32 +4,42 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "../../statics/FallBacks.h"
+
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
+// Owns an OpenGL shader program. Move-only (the destructor deletes the program).
+//
+// Failure convention:
+//   Create / CreateFromFiles / Get never return nullptr. On failure or a missing name they log an
+//   error and return the fallback shader. The fallback itself may be invalid (ID == 0) if even it
+//   failed to compile; use() and the uniform setters are safe no-ops on an invalid shader.
+//
+// Lifetime:
+//   Shaders live in a static map. Call Shader::Clear() BEFORE destroying the GL context/window,
+//   otherwise the static destructors run after the context is gone and glDeleteProgram is UB.
 class Shader
 {
 public:
-    unsigned int ID = 0;
+    GLuint ID = 0;
 
-    Shader() = default;
-
-    Shader(const std::string& vertexPath, const std::string& fragmentPath)
+    Shader(const std::string& vertexCode, const std::string& fragmentCode)
     {
-        std::string vertexCode = ReadFile(vertexPath.c_str());
-        std::string fragmentCode = ReadFile(fragmentPath.c_str());
-
         if (vertexCode.empty() || fragmentCode.empty())
             return;
 
-        unsigned int vertex = CompileShader(vertexCode, GL_VERTEX_SHADER);
+        GLuint vertex = CompileShader(vertexCode, GL_VERTEX_SHADER);
         if (vertex == 0)
             return;
 
-        unsigned int fragment = CompileShader(fragmentCode, GL_FRAGMENT_SHADER);
+        GLuint fragment = CompileShader(fragmentCode, GL_FRAGMENT_SHADER);
         if (fragment == 0)
         {
             glDeleteShader(vertex);
@@ -41,66 +51,113 @@ public:
         glAttachShader(ID, fragment);
         glLinkProgram(ID);
 
-        int success;
-        char infoLog[512];
+        GLint success = 0;
         glGetProgramiv(ID, GL_LINK_STATUS, &success);
         if (!success)
         {
-            glGetProgramInfoLog(ID, 512, nullptr, infoLog);
-            std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+            std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << GetProgramLog(ID) << std::endl;
             glDeleteProgram(ID);
             ID = 0;
-            glDeleteShader(vertex);
-            glDeleteShader(fragment);
-            return;
         }
 
+        // Shader objects are no longer needed once linking has been attempted.
         glDeleteShader(vertex);
         glDeleteShader(fragment);
+    }
+
+    ~Shader()
+    {
+        if (ID != 0)
+            glDeleteProgram(ID);
+    }
+
+    Shader(const Shader&) = delete;
+    Shader& operator=(const Shader&) = delete;
+
+    Shader(Shader&& other) noexcept
+        : ID(std::exchange(other.ID, 0)),
+          name(std::move(other.name)),
+          uniformLocations(std::move(other.uniformLocations))
+    {
+    }
+
+    Shader& operator=(Shader&& other) noexcept
+    {
+        if (this != &other)
+        {
+            if (ID != 0)
+                glDeleteProgram(ID);
+
+            ID = std::exchange(other.ID, 0);
+            name = std::move(other.name);
+            uniformLocations = std::move(other.uniformLocations);
+        }
+        return *this;
     }
 
     // =========================================================================
     // Static Storage & Shader Management
     // =========================================================================
 
-    // Creates a shader from a base path (e.g. "shaders/default" -> "shaders/default.vert" & "shaders/default.frag")
-    // and stores it in the lookup map.
+    // Creates a shader from a base path (e.g. "default" -> "default.vert" & "default.frag")
+    // and stores it in the lookup map under `name` (defaults to `path`).
     static Shader* Create(const std::string& path, const std::string& name = "")
     {
-        std::string name_t = name.empty() ? path : name;
-        return Create(path + ".vert", path + ".frag", name_t);
+        return CreateFromFiles(path + ".vert", path + ".frag", name.empty() ? path : name);
     }
 
-    // Creates a shader with explicit vertex and fragment paths and stores it in the lookup map.
-    static Shader* Create(const std::string& vertexPath, const std::string& fragmentPath, const std::string& name)
+    // Creates a shader from explicit vertex and fragment paths and stores it in the lookup map.
+    // (Named differently from Create so that Create("a.vert", "a.frag") can't silently bind to
+    //  the (path, name) overload.)
+    static Shader* CreateFromFiles(const std::string& vertexPath, const std::string& fragmentPath, const std::string& name)
     {
-        if (shaders.find(name) != shaders.end())
+        auto existing = shaders.find(name);
+        if (existing != shaders.end())
         {
             std::cerr << "ERROR::SHADER::ALREADY_EXISTS: " << name << std::endl;
-            return &shaders[name];
+            return existing->second.get();
         }
-        
-        Shader shader(vertexPath, fragmentPath);
-        if (shader.ID == 0)
+
+        const std::string vertexCode = ReadFile(vertexPath);
+        const std::string fragmentCode = ReadFile(fragmentPath);
+
+        auto shader = std::make_unique<Shader>(vertexCode, fragmentCode);
+        if (shader->ID == 0)
         {
             std::cerr << "ERROR::SHADER::CREATION_FAILED: " << name << std::endl;
-            return nullptr;
+            return GetFallback();
         }
 
-        auto [it, inserted] = shaders.insert_or_assign(name, std::move(shader));
-        return &it->second;
+        shader->name = name;
+        auto [it, inserted] = shaders.emplace(name, std::move(shader));
+        return it->second.get();
     }
 
-    // Look up shader in map. Returns nullptr and logs error if missing.
+    // Looks up a shader by name. Logs an error and returns the fallback shader if missing.
     static Shader* Get(const std::string& name)
     {
         auto it = shaders.find(name);
         if (it == shaders.end())
         {
             std::cerr << "ERROR::SHADER::NOT_FOUND: " << name << std::endl;
-            return nullptr;
+            return GetFallback();
         }
-        return &it->second;
+        return it->second.get();
+    }
+
+    // Returns the fallback shader, creating it on first use. Never nullptr.
+    static Shader* GetFallback()
+    {
+        if (!fallbackShader)
+            CreateFallbackShader();
+        return fallbackShader.get();
+    }
+
+    // Deletes every stored shader (and the fallback). Call while the GL context is still alive.
+    static void Clear()
+    {
+        shaders.clear();
+        fallbackShader.reset();
     }
 
     // =========================================================================
@@ -112,11 +169,19 @@ public:
         return name;
     }
 
+    bool IsValid() const
+    {
+        return ID != 0;
+    }
+
     void use() const
     {
         if (ID != 0)
             glUseProgram(ID);
     }
+
+    // NOTE: the setters below use glUniform*, which affects the currently bound program.
+    // Call use() first. (On GL 4.1+ you could switch to glProgramUniform* to drop that requirement.)
 
     void setBool(const std::string& uniformName, bool value)
     {
@@ -168,25 +233,29 @@ public:
     }
 
 private:
-    inline static std::unordered_map<std::string, Shader> shaders;
+    inline static std::unordered_map<std::string, std::unique_ptr<Shader>> shaders;
+    inline static std::unique_ptr<Shader> fallbackShader;
 
     std::string name;
     std::unordered_map<std::string, GLint> uniformLocations;
 
     GLint GetUniformLocation(const std::string& uniformName)
     {
+        if (ID == 0)
+            return -1;
+
         auto it = uniformLocations.find(uniformName);
         if (it != uniformLocations.end())
             return it->second;
 
         GLint location = glGetUniformLocation(ID, uniformName.c_str());
-        uniformLocations[uniformName] = location;
+        uniformLocations.emplace(uniformName, location);
         return location;
     }
 
-    static std::string ReadFile(const char* filepath)
+    static std::string ReadFile(const std::string& filepath)
     {
-        std::string fullPath = CONFIG::DIRECTORY::SHADERS + std::string(filepath);
+        const std::string fullPath = CONFIG::DIRECTORY::SHADERS + filepath;
 
         std::ifstream file(fullPath, std::ios::in | std::ios::binary);
         if (!file.is_open())
@@ -200,25 +269,57 @@ private:
         return buffer.str();
     }
 
-    static unsigned int CompileShader(const std::string& source, GLenum shaderType)
+    static std::string GetShaderLog(GLuint shader)
+    {
+        GLint length = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+        if (length <= 1)
+            return "";
+
+        std::vector<char> log(static_cast<size_t>(length));
+        glGetShaderInfoLog(shader, length, nullptr, log.data());
+        return std::string(log.data());
+    }
+
+    static std::string GetProgramLog(GLuint program)
+    {
+        GLint length = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+        if (length <= 1)
+            return "";
+
+        std::vector<char> log(static_cast<size_t>(length));
+        glGetProgramInfoLog(program, length, nullptr, log.data());
+        return std::string(log.data());
+    }
+
+    static GLuint CompileShader(const std::string& source, GLenum shaderType)
     {
         const char* shaderCode = source.c_str();
-        unsigned int shader = glCreateShader(shaderType);
+        GLuint shader = glCreateShader(shaderType);
         glShaderSource(shader, 1, &shaderCode, nullptr);
         glCompileShader(shader);
 
-        int success;
-        char infoLog[512];
+        GLint success = 0;
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
         if (!success)
         {
-            glGetShaderInfoLog(shader, 512, nullptr, infoLog);
             const char* shaderTypeName = (shaderType == GL_VERTEX_SHADER) ? "VERTEX" : "FRAGMENT";
-            std::cerr << "ERROR::SHADER::" << shaderTypeName << "::COMPILATION_FAILED\n" << infoLog << std::endl;
+            std::cerr << "ERROR::SHADER::" << shaderTypeName << "::COMPILATION_FAILED\n"
+                      << GetShaderLog(shader) << std::endl;
             glDeleteShader(shader);
             return 0;
         }
 
         return shader;
+    }
+
+    static void CreateFallbackShader()
+    {
+        fallbackShader = std::make_unique<Shader>(FallBacks::VertexShaderCode, FallBacks::FragmentShaderCode);
+        fallbackShader->name = "__fallback__";
+
+        if (fallbackShader->ID == 0)
+            std::cerr << "ERROR::SHADER::FALLBACK_SHADER_CREATION_FAILED" << std::endl;
     }
 };
