@@ -1,27 +1,38 @@
-set(APPLICATION_NAME "PvJ")
-
-cmake_minimum_required(VERSION 3.10)
-project(${APPLICATION_NAME})
+cmake_minimum_required(VERSION 3.20)
+project(SimpleEngine)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(engine)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-find_package(OpenGL REQUIRED)
+add_subdirectory(external/glfw)
+add_subdirectory(external/glm)
 
-add_executable(${APPLICATION_NAME}
-    src/Application.cpp
+# 4. Create your Engine as a static library
+add_library(Engine STATIC
+    IDK.cpp
+    Engine.h
+    Config.h
 )
 
-target_link_libraries(${APPLICATION_NAME} PRIVATE Engine)
+# 5. Set up the Include Directories
+# Expose the engine root so users can simply #include "Engine.h"
+target_include_directories(Engine PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/components
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/scenes
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/glad/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/stb
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/miniaudio
+)
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
-    add_custom_command(
-        TARGET ${APPLICATION_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_SOURCE_DIR}/assets"
-                "$<TARGET_FILE_DIR:${APPLICATION_NAME}>/assets"
-        COMMENT "Copying assets folder to output directory..."
-    )
-endif()
+# 6. Find system OpenGL natively
+find_package(OpenGL REQUIRED)
+
+# 7. Link everything together
+target_link_libraries(Engine PUBLIC glfw OpenGL::GL)
