@@ -1,9 +1,5 @@
-# people will build the project themselves
-build/
-
 # these files are for personal testing
-src/
 !engine/external/glfw/src/
 
-assets/*
-!assets/ADD_ASSETS_HERE.txt
+# Ignore CMake shenanigans
+build/
