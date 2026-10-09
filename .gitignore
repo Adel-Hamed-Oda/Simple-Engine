@@ -1,5 +1,2 @@
-# these files are for personal testing
-!engine/external/glfw/src/
-
 # Ignore CMake shenanigans
 build/
