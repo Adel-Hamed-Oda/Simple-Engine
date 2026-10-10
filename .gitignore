@@ -1,2 +1,8 @@
 # Ignore CMake shenanigans
 build/
+
+# Ignore vs code and visual studio files
+.vscode/
+*.sln
+.vs/
+.VSCodeCounter/
