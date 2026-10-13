@@ -7,6 +7,7 @@
 #include <string>
 
 #include "../../components/mesh_renderer/MeshRenderer.h"
+#include "../../components/text_renderer/TextRenderer.h"
 #include "../gameobject/GameObject.h"
 #include "../rendering/material/Material.h"
 #include "../rendering/shader/Shader.h"
@@ -47,35 +48,21 @@ public:
 		MeshRenderer* meshRenderer = obj->GetComponent<MeshRenderer>();
 		Transform* transform = obj->transform.get();
 
-		if (!meshRenderer || !transform) return;
+		if (meshRenderer && transform)
+		{
+			Material* material = meshRenderer->GetMaterial();
+			if (material && material->SetupCoreUniforms(*transform))
+			{
+				material->ApplyMaterial();
+				SendLights(material->shader);
+				meshRenderer->Draw();
+			}
+		}
 
-		Material* material = meshRenderer->GetMaterial();
-
-		if (!material) return;
-
-		// --------------------------------------------------
-		// Bind shader + positional uniforms (model/view/projection)
-		// --------------------------------------------------
-
-		if (!material->SetupCoreUniforms(*transform)) return;
-
-		// --------------------------------------------------
-		// Material properties
-		// --------------------------------------------------
-
-		material->ApplyMaterial();
-
-		// --------------------------------------------------
-		// Lighting - every active LightSource in the scene
-		// --------------------------------------------------
-
-		SendLights(material->shader);
-
-		// --------------------------------------------------
-		// Draw
-		// --------------------------------------------------
-
-		meshRenderer->Draw();
+		if (TextRenderer* textRenderer = obj->GetComponent<TextRenderer>())
+		{
+			textRenderer->Render();
+		}
 	}
 
 private:
