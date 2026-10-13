@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <string>
 
-#include "../../components/meshrenderer/MeshRenderer.h"
+#include "../../components/mesh_renderer/MeshRenderer.h"
 #include "../gameobject/GameObject.h"
 #include "../rendering/material/Material.h"
 #include "../rendering/shader/Shader.h"
