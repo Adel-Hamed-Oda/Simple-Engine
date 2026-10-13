@@ -8,8 +8,16 @@ set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
+# FreeType: we only need TrueType rasterization, so turn off optional deps
+set(FT_DISABLE_ZLIB     ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BZIP2    ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_PNG      ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BROTLI   ON CACHE BOOL "" FORCE)
+
 add_subdirectory(external/glfw)
 add_subdirectory(external/glm)
+add_subdirectory(external/freetype)
 
 # 4. Create your Engine as a static library
 add_library(Engine STATIC
@@ -25,8 +33,8 @@ target_include_directories(Engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/components
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/scenes
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/glad/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/glad/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/stb
     ${CMAKE_CURRENT_SOURCE_DIR}/external/miniaudio
 )
@@ -36,3 +44,4 @@ find_package(OpenGL REQUIRED)
 
 # 7. Link everything together
 target_link_libraries(Engine PUBLIC glfw OpenGL::GL)
+target_link_libraries(Engine PUBLIC freetype)

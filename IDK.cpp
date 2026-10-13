@@ -6,3 +6,6 @@
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio.h>
+
+#include <ft2build.h>
+#include FT_FREETYPE_H 
