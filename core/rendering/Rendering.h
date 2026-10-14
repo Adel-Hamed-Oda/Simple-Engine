@@ -5,86 +5,152 @@
 
 #include <algorithm>
 #include <string>
+#include <vector>
 
 #include "../../components/mesh_renderer/MeshRenderer.h"
 #include "../../components/text_renderer/TextRenderer.h"
+#include "../../components/light_source/LightSource.h"
+
 #include "../gameobject/GameObject.h"
 #include "../rendering/material/Material.h"
 #include "../rendering/shader/Shader.h"
-#include "../../components/light_source/LightSource.h"
+#include "../../scenes/Scene.h"
+
 #include "../../Config.h"
 
 class Rendering
 {
 public:
-	static void SetupRendering()
+    static void SetupRendering()
+    {
+        // Configure face culling explicitly.
+        if (PublicDomain::Rendering::FaceCulling == FACE_CULLING_MODE::NONE)
+        {
+            glDisable(GL_CULL_FACE);
+        }
+        else
+        {
+            glEnable(GL_CULL_FACE);
+
+            switch (PublicDomain::Rendering::FaceCulling)
+            {
+                case FACE_CULLING_MODE::BACK:
+                    glCullFace(GL_BACK);
+                    break;
+
+                case FACE_CULLING_MODE::FRONT:
+                    glCullFace(GL_FRONT);
+                    break;
+
+                case FACE_CULLING_MODE::FRONT_AND_BACK:
+                    glCullFace(GL_FRONT_AND_BACK);
+                    break;
+
+                default:
+                    glDisable(GL_CULL_FACE);
+                    break;
+            }
+        }
+
+        // Configure depth testing explicitly.
+        if (PublicDomain::Rendering::EnableDepthTest)
+        {
+            glEnable(GL_DEPTH_TEST);
+        }
+        else
+        {
+            glDisable(GL_DEPTH_TEST);
+        }
+    }
+
+	static void RenderScene(const Scene* scene)
 	{
-		if (PublicDomain::Rendering::FaceCulling != FACE_CULLING_MODE::NONE)
-		{
-			glEnable(GL_CULL_FACE); // Enable back-face culling
-		}
+		if (!scene)
+			return;
 
-		if (PublicDomain::Rendering::FaceCulling == FACE_CULLING_MODE::BACK)
-		{
-			glCullFace(GL_BACK); // Cull back faces
-		}
-		else if (PublicDomain::Rendering::FaceCulling == FACE_CULLING_MODE::FRONT)
-		{
-			glCullFace(GL_FRONT); // Cull front faces
-		}
-		else if (PublicDomain::Rendering::FaceCulling == FACE_CULLING_MODE::FRONT_AND_BACK)
-		{
-			glCullFace(GL_FRONT_AND_BACK); // Cull both front and back faces
-		}
+		deferredTextRenderers.clear();
 
-		if (PublicDomain::Rendering::EnableDepthTest)
+		for (const auto& obj : scene->GetGameObjects())
 		{
-			glEnable(GL_DEPTH_TEST);
-		}
-	}
+			if (!obj || !obj->transform)
+				continue;
 
-	static void RenderGameObject(GameObject* obj)
-	{
-		MeshRenderer* meshRenderer = obj->GetComponent<MeshRenderer>();
-		Transform* transform = obj->transform.get();
+			Transform& transform = *obj->transform;
 
-		if (meshRenderer && transform)
-		{
-			Material* material = meshRenderer->GetMaterial();
-			if (material && material->SetupCoreUniforms(*transform))
+			if (MeshRenderer* meshRenderer =
+					obj->GetComponent<MeshRenderer>())
 			{
-				material->ApplyMaterial();
-				SendLights(material->shader);
-				meshRenderer->Draw();
+				Material* material = meshRenderer->GetMaterial();
+
+				if (material && material->SetupCoreUniforms(transform))
+				{
+					material->ApplyMaterial();
+					SendLights(material->shader);
+					meshRenderer->Draw();
+				}
+			}
+
+			if (TextRenderer* textRenderer =
+					obj->GetComponent<TextRenderer>())
+			{
+				deferredTextRenderers.push_back(textRenderer);
 			}
 		}
 
-		if (TextRenderer* textRenderer = obj->GetComponent<TextRenderer>())
+		std::stable_sort(
+			deferredTextRenderers.begin(),
+			deferredTextRenderers.end(),
+			[](const TextRenderer* a, const TextRenderer* b)
+			{
+				return a->GetZOrder() < b->GetZOrder();
+			});
+
+		for (TextRenderer* textRenderer : deferredTextRenderers)
 		{
-			textRenderer->Render();
+			if (textRenderer)
+				textRenderer->Render();
 		}
+
+		deferredTextRenderers.clear();
 	}
 
 private:
-	static void SendLights(Shader* shader)
-	{
-		if (!shader) return;
+    // C++17 or later: inline static avoids a separate definition in a .cpp.
+    inline static std::vector<TextRenderer*> deferredTextRenderers{};
 
-		const auto& lights = LightSource::allLights;
+    static void SendLights(Shader* shader)
+    {
+        if (!shader)
+            return;
 
-		const int lightCount = static_cast<int>(
-			std::min(lights.size(), static_cast<size_t>(CONFIG::LIGHTING::MAX_LIGHTS))
-		);
+        const auto& lights = LightSource::allLights;
 
-		shader->setInt("numLights", lightCount);
+        const int maxLights =
+            std::max(0, CONFIG::LIGHTING::MAX_LIGHTS);
 
-		for (int i = 0; i < lightCount; ++i)
-		{
-			LightSource* light = lights[i];
-			const std::string prefix = "lights[" + std::to_string(i) + "].";
+        const int lightCount = static_cast<int>(
+            std::min(lights.size(),
+                     static_cast<std::size_t>(maxLights)));
 
-			shader->setVec3(prefix + "position", light->transform->position);
-			shader->setVec3(prefix + "color", light->color);
-		}
-	}
+        shader->setInt("numLights", lightCount);
+
+        for (int i = 0; i < lightCount; ++i)
+        {
+            LightSource* light = lights[i];
+
+            if (!light || !light->transform)
+                continue;
+
+            const std::string prefix =
+                "lights[" + std::to_string(i) + "].";
+
+            shader->setVec3(
+                prefix + "position",
+                light->transform->position);
+
+            shader->setVec3(
+                prefix + "color",
+                light->color);
+        }
+    }
 };
