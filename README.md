@@ -24,10 +24,47 @@ The public entry point is `Engine::run()`. It initializes the window and
 graphics context, initializes engine systems, runs the game loop, and performs
 shutdown when the window closes.
 
-## Minimal application
+## Setup and Minimal application
 
-Include `Engine.h`, define at least one scene, register it, and start the
-engine:
+First, create a folder with the name of the game you are creating [this section assumes it's called "TestOpenGLGame"]
+
+After that, create a new "CMakeLists.txt" file inside the folder and put the following code into it:
+
+```c
+set(APPLICATION_NAME "TestOpenGLGame")
+
+cmake_minimum_required(VERSION 3.10)
+project(${APPLICATION_NAME})
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_subdirectory(engine)
+
+find_package(OpenGL REQUIRED)
+
+add_executable(${APPLICATION_NAME}
+    src/Application.cpp
+)
+
+target_link_libraries(${APPLICATION_NAME} PRIVATE Engine)
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
+    add_custom_command(
+        TARGET ${APPLICATION_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/assets"
+                "$<TARGET_FILE_DIR:${APPLICATION_NAME}>/assets"
+        COMMENT "Copying assets folder to output directory..."
+    )
+endif()
+```
+
+After that, assuming you have installed git successfully, type `git submodule add "https://github.com/Adel-Hamed-Oda/Simple-Engine.git" engine` inside the terminal on the same level as the CMakeLists file.
+
+After the module is downloaded successfully, to be able to start the project you need to have an src folder and an Application.cpp file inside the src folder.
+
+Include `Engine.h`, define at least one scene, register it, and start the engine:
 
 ```cpp
 #include <memory>
