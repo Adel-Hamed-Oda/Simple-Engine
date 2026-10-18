@@ -29,6 +29,27 @@ public:
         return timer;
     }
 
+    // New overload: any callable plus the arguments to call it with
+    template <typename Func, typename Arg, typename... Args>
+    static Timer* Create(
+        float duration,
+        bool repeating,
+        Func&& func,
+        Arg&& arg,
+        Args&&... args
+    )
+    {
+        return Create(
+            duration,
+            repeating,
+            std::function<void()>(
+                std::bind(std::forward<Func>(func),
+                        std::forward<Arg>(arg),
+                        std::forward<Args>(args)...)
+            )
+        );
+    }
+
     static void UpdateAll()
     {
         for (size_t i = 0; i < activeTimers.size(); )
