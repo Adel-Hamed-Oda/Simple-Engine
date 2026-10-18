@@ -116,10 +116,7 @@ private:
             Scene* scene = SceneManager::GetCurrentScene();
             if (scene)
             {
-                for (const auto& obj : scene->GetGameObjects())
-                {
-                    Rendering::RenderGameObject(obj.get());
-                }
+                Rendering::RenderScene(scene);
             }
 
             Debug::EndFrame();

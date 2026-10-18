@@ -7,8 +7,9 @@
 
 #include "light_source/LightSource.h"
 
-#include "meshrenderer/Mesh.h"
-#include "meshrenderer/MeshRenderer.h"
+#include "mesh_renderer/Mesh.h"
+#include "mesh_renderer/MeshRenderer.h"
+#include "text_renderer/TextRenderer.h"
 
 #include "physics/BoxCollider.h"
 #include "physics/Collider.h"
