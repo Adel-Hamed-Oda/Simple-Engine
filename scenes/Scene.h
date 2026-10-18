@@ -49,6 +49,51 @@ public:
         return gameObject;
     }
 
+    GameObject* FindFirstGameObjectByName(const std::string& name)
+    {
+        for (const auto& obj : gameObjects)
+        {
+            if (obj->name == name)
+            {
+                return obj.get();
+            }
+        }
+        return nullptr;
+    }
+
+    std::vector<GameObject*> FindGameObjectsByName(const std::string& name)
+    {
+        std::vector<GameObject*> outObjects;
+        for (const auto& obj : gameObjects)
+        {
+            if (obj->name == name)
+            {
+                outObjects.push_back(obj.get());
+            }
+        }
+        return outObjects;
+    }
+
+    bool Destroy(GameObject* gameObject)
+    {
+        auto it = std::find_if(
+            gameObjects.begin(),
+            gameObjects.end(),
+            [gameObject](const std::unique_ptr<GameObject>& obj)
+            {
+                return obj.get() == gameObject;
+            }
+        );
+
+        if (it != gameObjects.end())
+        {
+            gameObjects.erase(it);
+            return true;
+        }
+
+        return false;
+    }
+
 protected:
     std::vector<std::unique_ptr<GameObject>> gameObjects;
 };
