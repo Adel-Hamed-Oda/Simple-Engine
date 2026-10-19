@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <concepts>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "../../components/Component.h"
@@ -61,11 +62,11 @@ public:
         }
     }
 
-    template <typename T>
-        requires std::derived_from<T, Component>
-    T* AddComponent()
+    template <typename T, typename... Args>
+        requires std::derived_from<T, Component> && std::constructible_from<T, Args...>
+    T* AddComponent(Args&&... args)
     {
-        return AddComponent(std::make_unique<T>());
+        return AddComponent(std::make_unique<T>(std::forward<Args>(args)...));
     }
 
     template <typename T>

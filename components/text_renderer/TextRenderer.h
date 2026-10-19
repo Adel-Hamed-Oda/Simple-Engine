@@ -38,7 +38,7 @@ public:
         Initialize();
     }
 
-    ~TextRenderer()
+    ~TextRenderer() override
     {
         for (const auto& [character, glyph] : glyphs)
             glDeleteTextures(1, &glyph.textureID);
@@ -51,6 +51,8 @@ public:
 
     TextRenderer(const TextRenderer&) = delete;
     TextRenderer& operator=(const TextRenderer&) = delete;
+
+    virtual bool IsScreenSpace() const { return false; }
 
     void SetText(const std::string& value) { text = value; }
     const std::string& GetText() const { return text; }
@@ -67,23 +69,29 @@ public:
         if (VAO == 0 || glyphs.empty() || !transform || !material || text.empty())
             return;
 
-        // Binds the shader and uploads model/view/projection from the Transform
-        // and the main camera. Returns false if the shader or camera is missing.
-        if (!material->SetupCoreUniforms(*transform))
+        const bool screenSpace = IsScreenSpace();
+
+        // World-space text uses the main camera's view/projection.
+        // Screen-space text uses an identity view and screen orthographic projection.
+        const bool uniformsReady = screenSpace
+            ? material->SetupScreenSpaceUniforms(*transform)
+            : material->SetupCoreUniforms(*transform);
+
+        if (!uniformsReady)
             return;
         material->ApplyMaterial();
 
-        // Depth testing stays ON so the text is hidden behind solid objects.
-        // Depth writes are OFF so the soft glyph edges don't punch holes in
-        // whatever is drawn after the text. Draw text after opaque geometry.
         const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
         const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+        const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
         GLboolean depthMask = GL_TRUE;
         glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(GL_FALSE);
+        if (screenSpace)
+            glDisable(GL_DEPTH_TEST);
         if (material->doubleSided)
             glDisable(GL_CULL_FACE);
 
@@ -129,11 +137,15 @@ public:
         glBindTexture(GL_TEXTURE_2D, 0);
 
         glDepthMask(depthMask);
+        if (depthEnabled) glEnable(GL_DEPTH_TEST);
+        else glDisable(GL_DEPTH_TEST);
         if (cullEnabled) glEnable(GL_CULL_FACE);
+        else glDisable(GL_CULL_FACE);
         if (!blendEnabled) glDisable(GL_BLEND);
     }
 
     int GetZOrder() const { return zOrder; }
+    void SetZOrder(int value) { zOrder = value; }
 
 private:
     struct Character
@@ -213,4 +225,20 @@ private:
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
     }
+};
+
+// Explicit World-Space Text Renderer (affected by camera view/projection and depth test).
+class WorldTextRenderer : public TextRenderer
+{
+public:
+    using TextRenderer::TextRenderer;
+    bool IsScreenSpace() const override { return false; }
+};
+
+// Screen-Space Text Renderer (HUD, menus, subtitles; ignores camera view/projection and depth testing).
+class ScreenTextRenderer : public TextRenderer
+{
+public:
+    using TextRenderer::TextRenderer;
+    bool IsScreenSpace() const override { return true; }
 };

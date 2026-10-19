@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "../../components/image_renderer/ImageRenderer.h"
 #include "../../components/mesh_renderer/MeshRenderer.h"
 #include "../../components/text_renderer/TextRenderer.h"
 #include "../../components/light_source/LightSource.h"
@@ -68,8 +69,10 @@ public:
 		if (!scene)
 			return;
 
-		deferredTextRenderers.clear();
+		deferredWorldTextRenderers.clear();
+		deferredScreenDrawItems.clear();
 
+		// Pass 1: World-Space Meshes (Opaque, Lit, Depth-Tested)
 		for (const auto& obj : scene->GetGameObjects())
 		{
 			if (!obj || !obj->transform)
@@ -90,33 +93,87 @@ public:
 				}
 			}
 
+			if (ImageRenderer* imageRenderer =
+					obj->GetComponent<ImageRenderer>())
+			{
+				deferredScreenDrawItems.push_back(ScreenDrawItem{
+					imageRenderer->GetZOrder(),
+					imageRenderer,
+					nullptr
+				});
+			}
+
 			if (TextRenderer* textRenderer =
 					obj->GetComponent<TextRenderer>())
 			{
-				deferredTextRenderers.push_back(textRenderer);
+				if (textRenderer->IsScreenSpace())
+				{
+					deferredScreenDrawItems.push_back(ScreenDrawItem{
+						textRenderer->GetZOrder(),
+						nullptr,
+						textRenderer
+					});
+				}
+				else
+				{
+					deferredWorldTextRenderers.push_back(textRenderer);
+				}
 			}
 		}
 
+		// Pass 2: World-Space Text (Depth-Tested against 3D world, sorted by zOrder)
 		std::stable_sort(
-			deferredTextRenderers.begin(),
-			deferredTextRenderers.end(),
+			deferredWorldTextRenderers.begin(),
+			deferredWorldTextRenderers.end(),
 			[](const TextRenderer* a, const TextRenderer* b)
 			{
 				return a->GetZOrder() < b->GetZOrder();
 			});
 
-		for (TextRenderer* textRenderer : deferredTextRenderers)
+		for (TextRenderer* textRenderer : deferredWorldTextRenderers)
 		{
 			if (textRenderer)
 				textRenderer->Render();
 		}
 
-		deferredTextRenderers.clear();
+		deferredWorldTextRenderers.clear();
+
+		// Pass 3: Screen-Space UI (ImageRenderer + ScreenTextRenderer sorted together by zOrder)
+		std::stable_sort(
+			deferredScreenDrawItems.begin(),
+			deferredScreenDrawItems.end(),
+			[](const ScreenDrawItem& a, const ScreenDrawItem& b)
+			{
+				return a.zOrder < b.zOrder;
+			});
+
+		for (const ScreenDrawItem& item : deferredScreenDrawItems)
+		{
+			item.Render();
+		}
+
+		deferredScreenDrawItems.clear();
 	}
 
 private:
+    struct ScreenDrawItem
+    {
+        int zOrder = 0;
+        const ImageRenderer* imageRenderer = nullptr;
+        const TextRenderer* textRenderer = nullptr;
+
+        void Render() const
+        {
+            if (imageRenderer)
+                imageRenderer->Render();
+            else if (textRenderer)
+                textRenderer->Render();
+        }
+    };
+
     // C++17 or later: inline static avoids a separate definition in a .cpp.
-    inline static std::vector<TextRenderer*> deferredTextRenderers{};
+    inline static std::vector<TextRenderer*> deferredWorldTextRenderers{};
+    inline static std::vector<ScreenDrawItem> deferredScreenDrawItems{};
 
     static void SendLights(Shader* shader)
     {

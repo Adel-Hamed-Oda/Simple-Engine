@@ -7,6 +7,7 @@
 
 #include "light_source/LightSource.h"
 
+#include "image_renderer/ImageRenderer.h"
 #include "mesh_renderer/Mesh.h"
 #include "mesh_renderer/MeshRenderer.h"
 #include "text_renderer/TextRenderer.h"

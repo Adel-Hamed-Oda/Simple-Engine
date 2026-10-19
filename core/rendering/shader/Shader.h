@@ -133,6 +133,27 @@ public:
         return it->second.get();
     }
 
+    // Creates a shader directly from vertex and fragment source code strings and stores it in the lookup map.
+    static Shader* CreateFromSource(const std::string& vertexCode, const std::string& fragmentCode, const std::string& name)
+    {
+        auto existing = shaders.find(name);
+        if (existing != shaders.end())
+        {
+            return existing->second.get();
+        }
+
+        auto shader = std::make_unique<Shader>(vertexCode, fragmentCode);
+        if (shader->ID == 0)
+        {
+            std::cerr << "ERROR::SHADER::CREATION_FAILED: " << name << std::endl;
+            return GetFallback();
+        }
+
+        shader->name = name;
+        auto [it, inserted] = shaders.emplace(name, std::move(shader));
+        return it->second.get();
+    }
+
     // Looks up a shader by name. Logs an error and returns the fallback shader if missing.
     static Shader* Get(const std::string& name)
     {

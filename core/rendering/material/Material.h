@@ -56,7 +56,25 @@ public:
 		return true;
 	}
 
-	// Uploads this material's own properties (called after SetupCoreUniforms).
+	// Binds the shader program, then uploads model, identity view, and screen-space orthographic projection.
+	// Does not require Camera::mainCamera so screen-space UI and menus can render independently.
+	bool SetupScreenSpaceUniforms(const Transform& transform) const
+	{
+		if (!shader || shader->ID == 0) return false;
+
+		const float aspect = GetAspectRatio();
+		const glm::mat4 orthoProjection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -10.0f, 10.0f);
+
+		shader->use();
+
+		shader->setMat4("model", transform.GetModelMatrix());
+		shader->setMat4("view", glm::mat4(1.0f));
+		shader->setMat4("projection", orthoProjection);
+
+		return true;
+	}
+
+	// Uploads this material's own properties (called after SetupCoreUniforms / SetupScreenSpaceUniforms).
 	virtual void ApplyMaterial() = 0;
 
 private:
@@ -64,6 +82,9 @@ private:
 	// we will be doing this ourselves
 	static float GetAspectRatio()
 	{
+		if (!PublicDomain::CurrentWindow || !PublicDomain::CurrentWindow->GetGLFWWindow())
+			return 1.0f;
+
 		int width = 0, height = 0;
 		glfwGetFramebufferSize(PublicDomain::CurrentWindow->GetGLFWWindow(), &width, &height);
 		if (height == 0) return 1.0f; // minimized window
