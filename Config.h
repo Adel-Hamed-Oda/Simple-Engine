@@ -63,5 +63,6 @@ namespace CONFIG
         constexpr const char* SHADERS = "assets/";
         constexpr const char* TEXTURES = "assets/";
         constexpr const char* AUDIO = "assets/";
+        constexpr const char* MODELS = "assets/";
     }
 }

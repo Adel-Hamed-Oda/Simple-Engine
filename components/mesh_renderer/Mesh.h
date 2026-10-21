@@ -1,19 +1,40 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
 
+#include <cmath>
+#include <string>
 #include <vector>
 
 class Mesh
 {
 public:
     Mesh() = default;
+    explicit Mesh(
+        const std::string& path,
+        glm::vec4 defaultColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)
+    );
 
     std::vector<glm::vec3> vertices;
     std::vector<unsigned int> triangles;
     std::vector<glm::vec3> normals;
     std::vector<glm::vec4> colors;
     std::vector<glm::vec2> uvs;
+
+    // Base texture name(s) loaded via ModelLoader (registered in Texture::Get)
+    std::string textureName = "";
+    std::vector<std::string> textureNames;
+
+    static Mesh LoadFromFile(
+        const std::string& path,
+        glm::vec4 defaultColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)
+    );
+
+    static Mesh CreateFromFile(
+        const std::string& path,
+        glm::vec4 defaultColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)
+    );
 
     static Mesh CreateCube(
         glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)
@@ -311,3 +332,29 @@ public:
         return mesh;
     }
 };
+
+#include "ModelLoader.h"
+
+inline Mesh::Mesh(
+    const std::string& path,
+    glm::vec4 defaultColor
+)
+{
+    *this = ModelLoader::LoadMesh(path, defaultColor);
+}
+
+inline Mesh Mesh::LoadFromFile(
+    const std::string& path,
+    glm::vec4 defaultColor
+)
+{
+    return ModelLoader::LoadMesh(path, defaultColor);
+}
+
+inline Mesh Mesh::CreateFromFile(
+    const std::string& path,
+    glm::vec4 defaultColor
+)
+{
+    return ModelLoader::LoadMesh(path, defaultColor);
+}

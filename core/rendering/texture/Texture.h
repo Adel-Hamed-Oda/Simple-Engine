@@ -95,6 +95,7 @@ public:
             return nullptr;
         }
 
+        texture.name = name_t;
         auto [it, inserted] = textures.insert_or_assign(name_t, std::move(texture));
         return &it->second;
     }
@@ -111,8 +112,13 @@ public:
         return &it->second;
     }
 
+    static bool Has(const std::string& name)
+    {
+        return textures.find(name) != textures.end();
+    }
+
     // =========================================================================
-    // Shader Instance Methods
+    // Instance Methods
     // =========================================================================
 
     const std::string& GetName() const
