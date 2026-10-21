@@ -7,8 +7,6 @@
 #include <string>
 #include <vector>
 
-#include "ModelLoader.h"
-
 class Mesh
 {
 public:
@@ -23,14 +21,6 @@ public:
     // Base texture name(s) loaded via ModelLoader (registered in Texture::Get)
     std::string textureName = "";
     std::vector<std::string> textureNames;
-
-    static Mesh CreateFromFile(
-        const std::string& path,
-        glm::vec4 defaultColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)
-    ) 
-    {
-        return ModelLoader::LoadMesh(path, defaultColor);
-    }
 
     static Mesh CreateCube(
         glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)
