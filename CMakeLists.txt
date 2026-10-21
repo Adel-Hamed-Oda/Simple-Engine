@@ -15,9 +15,17 @@ set(FT_DISABLE_PNG      ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BROTLI   ON CACHE BOOL "" FORCE)
 
+# Assimp: disable unecessary features to reduce build time and size
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
+set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE) # Build statically like the rest of the engine
+
 add_subdirectory(external/glfw)
 add_subdirectory(external/glm)
 add_subdirectory(external/freetype)
+add_subdirectory(external/assimp)
 
 # 4. Create your Engine as a static library
 add_library(Engine STATIC
@@ -45,3 +53,4 @@ find_package(OpenGL REQUIRED)
 # 7. Link everything together
 target_link_libraries(Engine PUBLIC glfw OpenGL::GL)
 target_link_libraries(Engine PUBLIC freetype)
+target_link_libraries(Engine PUBLIC assimp)
