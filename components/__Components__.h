@@ -17,4 +17,6 @@
 #include "physics/Collider.h"
 #include "physics/Rigidbody.h"
 
+#include "ui/Button.h"
+
 #include "Component.h"
