@@ -44,10 +44,7 @@ public:
     {
         for (const auto& component : components)
         {
-            if (Behaviour* behaviour = dynamic_cast<Behaviour*>(component.get()))
-            {
-                behaviour->Start();
-            }
+            component->Start();
         }
     }
 
@@ -55,10 +52,7 @@ public:
     {
         for (const auto& component : components)
         {
-            if (Behaviour* behaviour = dynamic_cast<Behaviour*>(component.get()))
-            {
-                behaviour->Update();
-            }
+            component->Update();
         }
     }
 
