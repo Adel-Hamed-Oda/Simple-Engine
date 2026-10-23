@@ -25,4 +25,15 @@ namespace PublicDomain
     }
     
     inline Window* CurrentWindow = nullptr;
+
+    inline void ChangeCursorVisibility(bool visible)
+    {
+        if (CurrentWindow)
+        {
+            if (visible)
+                glfwSetInputMode(CurrentWindow->GetGLFWWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            else
+                glfwSetInputMode(CurrentWindow->GetGLFWWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        }
+    }
 }
