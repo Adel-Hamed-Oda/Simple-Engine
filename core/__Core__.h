@@ -3,6 +3,8 @@
 
 #include "audio/AudioSource.h"
 
+#include "events/Event.h"
+
 #include "gameobject/GameObject.h"
 
 #include "physics/Physics.h"
