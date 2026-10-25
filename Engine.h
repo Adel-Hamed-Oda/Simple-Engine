@@ -37,8 +37,14 @@ public:
     {
         return MainLoop();
     }
+    static void terminate()
+    {
+        terminated = true;
+    }
 
 private:
+    inline static bool terminated = false;
+
     static bool GLFW()
     {
         if (!glfwInit())
@@ -92,7 +98,7 @@ private:
 
     static bool MainLoop()
     {
-        while (!glfwWindowShouldClose(PublicDomain::CurrentWindow->GetGLFWWindow()))
+        while (!glfwWindowShouldClose(PublicDomain::CurrentWindow->GetGLFWWindow()) && !terminated)
         {
             glfwPollEvents();
 
