@@ -17,10 +17,9 @@ public:
 	float shininess = 32.0f;
 
 	explicit DefaultMaterial(
-		const std::string& shaderName, 
-		const std::string& textureName = ""
-	) : Material(shaderName), textureName(textureName) {}
-	
+		const std::string& shaderName = ""
+	) : Material(shaderName) {}
+
 	~DefaultMaterial() override = default;
 
 	void ApplyMaterial() override
