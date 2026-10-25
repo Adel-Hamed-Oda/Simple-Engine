@@ -6,7 +6,9 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+#include <algorithm>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <string>
@@ -15,10 +17,13 @@
 #include "../Component.h"
 #include "../../core/rendering/material/TextMaterial.h"   // adjust to your layout
 
-// World-space text. The string is laid out in the object's local XY plane,
-// facing +Z, with the baseline at y = 0 and the first glyph starting at x = 0.
-// One em (the font's pixelSize) equals one world unit at Transform scale 1,
-// so Transform position/rotation/scale place, orient and size the text.
+// Base text renderer:
+// - In World Space (WorldTextRenderer): the string is laid out in the object's local XY plane,
+//   facing +Z, with the baseline at y = 0 and the first glyph starting at x = 0.
+//   One em (the font's pixelSize) equals one world unit at Transform scale 1.
+// - In Screen Space (ScreenTextRenderer): the string's bounding box is normalized to [-0.5, +0.5]
+//   horizontally and vertically, so Position (0, 0, 0) is exact screen center, (0.5, 0.5, 0) is
+//   top-right, Scale (1, 1, 1) is full screen size, and Scale (0.5, 0.5, 1) is half screen width/height.
 class TextRenderer : public Component
 {
 public:
@@ -81,6 +86,63 @@ public:
             return;
         material->ApplyMaterial();
 
+        const float unit = 1.0f / static_cast<float>(pixelSize);   // glyph pixels -> local units
+
+        float centerX = 0.0f;
+        float centerY = 0.0f;
+        float invWidth = 1.0f;
+        float invHeight = 1.0f;
+
+        if (screenSpace)
+        {
+            float minX = std::numeric_limits<float>::max();
+            float maxX = std::numeric_limits<float>::lowest();
+            float minY = std::numeric_limits<float>::max();
+            float maxY = std::numeric_limits<float>::lowest();
+            bool hasVisibleGlyph = false;
+            float advanceX = 0.0f;
+
+            for (const char character : text)
+            {
+                const auto glyph = glyphs.find(character);
+                if (glyph == glyphs.end())
+                    continue;
+
+                const Character& g = glyph->second;
+                const float xpos = advanceX + g.bearing.x * unit;
+                const float ypos = (g.bearing.y - g.size.y) * unit;
+                const float w = g.size.x * unit;
+                const float h = g.size.y * unit;
+
+                if (w > 0.0f && h > 0.0f)
+                {
+                    minX = std::min(minX, xpos);
+                    maxX = std::max(maxX, xpos + w);
+                    minY = std::min(minY, ypos);
+                    maxY = std::max(maxY, ypos + h);
+                    hasVisibleGlyph = true;
+                }
+
+                advanceX += static_cast<float>(g.advance >> 6) * unit;
+            }
+
+            if (!hasVisibleGlyph)
+                return;
+
+            minX = std::min(minX, 0.0f);
+            maxX = std::max(maxX, advanceX);
+
+            const float textWidth = maxX - minX;
+            const float textHeight = maxY - minY;
+            if (textWidth <= 0.0f || textHeight <= 0.0f)
+                return;
+
+            centerX = (minX + maxX) * 0.5f;
+            centerY = (minY + maxY) * 0.5f;
+            invWidth = 1.0f / textWidth;
+            invHeight = 1.0f / textHeight;
+        }
+
         const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
         const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
         const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
@@ -98,7 +160,6 @@ public:
         glActiveTexture(GL_TEXTURE0);
         glBindVertexArray(VAO);
 
-        const float unit = 1.0f / static_cast<float>(pixelSize);   // glyph pixels -> world units
         float x = 0.0f;
 
         for (const char character : text)
@@ -113,16 +174,21 @@ public:
             const float w = g.size.x * unit;
             const float h = g.size.y * unit;
 
+            const float x0 = screenSpace ? ((xpos - centerX) * invWidth) : xpos;
+            const float x1 = screenSpace ? ((xpos + w - centerX) * invWidth) : (xpos + w);
+            const float y0 = screenSpace ? ((ypos - centerY) * invHeight) : ypos;
+            const float y1 = screenSpace ? ((ypos + h - centerY) * invHeight) : (ypos + h);
+
             // World space is y-up. The bitmap's first row is the TOP of the glyph,
             // so the top edge uses v = 0. Counter-clockwise when viewed from +Z.
             const float vertices[6][4] = {
-                { xpos,     ypos,     0.0f, 1.0f },  // bottom-left
-                { xpos + w, ypos,     1.0f, 1.0f },  // bottom-right
-                { xpos + w, ypos + h, 1.0f, 0.0f },  // top-right
+                { x0, y0, 0.0f, 1.0f },  // bottom-left
+                { x1, y0, 1.0f, 1.0f },  // bottom-right
+                { x1, y1, 1.0f, 0.0f },  // top-right
 
-                { xpos,     ypos,     0.0f, 1.0f },  // bottom-left
-                { xpos + w, ypos + h, 1.0f, 0.0f },  // top-right
-                { xpos,     ypos + h, 0.0f, 0.0f }   // top-left
+                { x0, y0, 0.0f, 1.0f },  // bottom-left
+                { x1, y1, 1.0f, 0.0f },  // top-right
+                { x0, y1, 0.0f, 0.0f }   // top-left
             };
 
             glBindTexture(GL_TEXTURE_2D, g.textureID);
@@ -236,6 +302,8 @@ public:
 };
 
 // Screen-Space Text Renderer (HUD, menus, subtitles; ignores camera view/projection and depth testing).
+// Normalized to [-0.5, +0.5] so Position (0, 0, 0) is center, (0.5, 0.5, 0) is top-right,
+// and Scale (1, 1, 1) is full screen width & height.
 class ScreenTextRenderer : public TextRenderer
 {
 public:

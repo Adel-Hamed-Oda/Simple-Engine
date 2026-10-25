@@ -56,14 +56,15 @@ public:
 		return true;
 	}
 
-	// Binds the shader program, then uploads model, identity view, and screen-space orthographic projection.
-	// Does not require Camera::mainCamera so screen-space UI and menus can render independently.
+	// Binds the shader program, then uploads model, identity view, and normalized screen-space orthographic projection.
+	// Screen space spans [-0.5, +0.5] horizontally and [-0.5, +0.5] vertically:
+	//   - Position (0, 0, 0) is exact center; (0.5, 0.5, 0) is top-right; (-0.5, -0.5, 0) is bottom-left.
+	//   - Scale (1, 1, 1) is full screen width & height; (0.5, 0.5, 1) is half screen width & height.
 	bool SetupScreenSpaceUniforms(const Transform& transform) const
 	{
 		if (!shader || shader->ID == 0) return false;
 
-		const float aspect = GetAspectRatio();
-		const glm::mat4 orthoProjection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -10.0f, 10.0f);
+		const glm::mat4 orthoProjection = glm::ortho(-0.5f, 0.5f, -0.5f, 0.5f, -10.0f, 10.0f);
 
 		shader->use();
 

@@ -156,7 +156,7 @@ public:
     }
 
     // Converts Input::MousePosition (window pixel coordinates, top-left origin)
-    // into screen-space orthographic coordinates ([-aspect, +aspect], [-1.0, +1.0]).
+    // into normalized screen-space coordinates ([-0.5, +0.5], [-0.5, +0.5]).
     static glm::vec2 GetMouseScreenPosition()
     {
         if (!PublicDomain::CurrentWindow || !PublicDomain::CurrentWindow->GetGLFWWindow())
@@ -169,16 +169,10 @@ public:
         if (winWidth <= 0 || winHeight <= 0)
             return glm::vec2(0.0f);
 
-        int fbWidth = 0, fbHeight = 0;
-        glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
-        const float aspect = (fbHeight > 0)
-            ? (static_cast<float>(fbWidth) / static_cast<float>(fbHeight))
-            : (static_cast<float>(winWidth) / static_cast<float>(winHeight));
+        const float screenX = (Input::MousePosition.x / static_cast<float>(winWidth)) - 0.5f;
+        const float screenY = 0.5f - (Input::MousePosition.y / static_cast<float>(winHeight));
 
-        const float ndcX = (2.0f * Input::MousePosition.x / static_cast<float>(winWidth)) - 1.0f;
-        const float ndcY = 1.0f - (2.0f * Input::MousePosition.y / static_cast<float>(winHeight));
-
-        return glm::vec2(ndcX * aspect, ndcY);
+        return glm::vec2(screenX, screenY);
     }
 
 private:
