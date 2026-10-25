@@ -14,7 +14,7 @@
 class Engine
 {
 public:
-    static int run()
+    static int setup()
     {
         if (!GLFW()) {
             std::cout << "GLFW initialization failed" << std::endl;
@@ -31,6 +31,10 @@ public:
 
         GenericSetup();
 
+        return 1;
+    }
+    static int run()
+    {
         return MainLoop();
     }
 
