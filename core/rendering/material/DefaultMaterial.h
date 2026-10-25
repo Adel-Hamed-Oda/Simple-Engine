@@ -16,7 +16,11 @@ public:
 	float specularStrength = 0.5f;
 	float shininess = 32.0f;
 
-	explicit DefaultMaterial(const std::string& shaderName) : Material(shaderName) {}
+	explicit DefaultMaterial(
+		const std::string& shaderName, 
+		const std::string& textureName = ""
+	) : Material(shaderName), textureName(textureName) {}
+	
 	~DefaultMaterial() override = default;
 
 	void ApplyMaterial() override

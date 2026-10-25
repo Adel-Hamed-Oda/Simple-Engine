@@ -14,10 +14,9 @@ public:
 	bool grayscale = false;
 
 	explicit ImageMaterial(
-		const std::string& textureName = "",
-		const std::string& shaderName = "Image"
-	)
-		: Material(shaderName), textureName(textureName) {}
+		const std::string& shaderName,
+		const std::string& textureName = ""
+	) : Material(shaderName), textureName(textureName) {}
 
 	~ImageMaterial() override = default;
 
