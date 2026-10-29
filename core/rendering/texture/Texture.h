@@ -55,24 +55,27 @@ public:
             return;
         }
 
-        glGenTextures(1, &ID);
-        glBindTexture(GL_TEXTURE_2D, ID);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, static_cast<GLenum>(wrapMode));
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, static_cast<GLenum>(wrapMode));
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, static_cast<GLenum>(filterMode));
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, static_cast<GLenum>(filterMode));
-
-        const GLenum format = GetFormatFromChannels(nrChannels);
-        GLint previousUnpackAlignment = 4;
-        glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
-        glGenerateMipmap(GL_TEXTURE_2D);
+        UploadToGPU(data, width, height, nrChannels);
 
         stbi_image_free(data);
         stbi_set_flip_vertically_on_load(false);
+    }
+
+    Texture(
+        const unsigned char* data,
+        int width,
+        int height,
+        int nrChannels,
+        TextureWrapMode wrap = TextureWrapMode::REPEAT,
+        TextureFilterMode filter = TextureFilterMode::LINEAR
+    )
+        : wrapMode(wrap),
+          filterMode(filter)
+    {
+        if (!data || width <= 0 || height <= 0)
+            return;
+
+        UploadToGPU(data, width, height, nrChannels);
     }
 
     // =========================================================================
@@ -97,6 +100,40 @@ public:
 
         texture.name = name_t;
         auto [it, inserted] = textures.insert_or_assign(name_t, std::move(texture));
+        return &it->second;
+    }
+
+    static Texture* CreateFromPixels(
+        const unsigned char* data,
+        int width,
+        int height,
+        int nrChannels,
+        const std::string& name,
+        TextureWrapMode wrap = TextureWrapMode::REPEAT,
+        TextureFilterMode filter = TextureFilterMode::LINEAR
+    )
+    {
+        if (name.empty())
+        {
+            std::cerr << "ERROR::TEXTURE::EMPTY_NAME" << std::endl;
+            return nullptr;
+        }
+
+        if (textures.find(name) != textures.end())
+        {
+            std::cerr << "ERROR::TEXTURE::ALREADY_EXISTS: " << name << std::endl;
+            return &textures[name];
+        }
+
+        Texture texture(data, width, height, nrChannels, wrap, filter);
+        if (texture.ID == 0)
+        {
+            std::cerr << "ERROR::TEXTURE::CREATION_FAILED: " << name << std::endl;
+            return nullptr;
+        }
+
+        texture.name = name;
+        auto [it, inserted] = textures.insert_or_assign(name, std::move(texture));
         return &it->second;
     }
 
@@ -130,6 +167,25 @@ private:
     inline static std::unordered_map<std::string, Texture> textures;
 
     std::string name;
+
+    void UploadToGPU(const unsigned char* data, int width, int height, int nrChannels)
+    {
+        glGenTextures(1, &ID);
+        glBindTexture(GL_TEXTURE_2D, ID);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, static_cast<GLenum>(wrapMode));
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, static_cast<GLenum>(wrapMode));
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, static_cast<GLenum>(filterMode));
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, static_cast<GLenum>(filterMode));
+
+        const GLenum format = GetFormatFromChannels(nrChannels);
+        GLint previousUnpackAlignment = 4;
+        glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
 
     GLenum GetFormatFromChannels(int nrChannels)
     {
