@@ -16,23 +16,16 @@ public:
 
 	DefaultMaterial() = default;
 
-	explicit DefaultMaterial(Shader* shader, Texture* texture = nullptr)
-		: Material(shader),
-		  texture(texture) {}
+	explicit DefaultMaterial(Shader* shader)
+		: Material(shader) {}
 
 	~DefaultMaterial() override = default;
-
-	Texture* GetTexture() const { return texture; }
-	bool HasTexture() const { return texture != nullptr && texture->IsValid(); }
-
-	void SetTexture(Texture* tex) { texture = tex; }
-	void ClearTexture() { texture = nullptr; }
 
 	void ApplyMaterial() override
 	{
 		if (!shader || !shader->IsValid()) return;
 
-		const bool hasTexture = HasTexture();
+		const bool hasTexture = texture && texture->IsValid();
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, hasTexture ? texture->ID : 0);
 
