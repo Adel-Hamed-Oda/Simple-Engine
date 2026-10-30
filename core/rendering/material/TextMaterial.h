@@ -1,6 +1,5 @@
 #pragma once
 
-#include <string>
 #include <glm/glm.hpp>
 
 #include "Material.h"
@@ -11,14 +10,21 @@ public:
 	glm::vec3 color = glm::vec3(1.0f);
 	bool doubleSided = true;   // false: text is only visible from its front (+Z) side
 
-	explicit TextMaterial(
-		const std::string& shaderName = ""
-	) : Material(shaderName) {}
+	TextMaterial() = default;
+
+	explicit TextMaterial(Shader* shader)
+		: Material(shader) {}
+
 	~TextMaterial() override = default;
+
+	static TextMaterial* Create(Shader* shader)
+	{
+		return new TextMaterial(shader);
+	}
 
 	void ApplyMaterial() override
 	{
-		if (!shader) return;
+		if (!shader || !shader->IsValid()) return;
 
 		shader->setVec3("textColor", color);
 		shader->setInt("textTexture", 0);   // glyph bitmap is bound to unit 0 per character

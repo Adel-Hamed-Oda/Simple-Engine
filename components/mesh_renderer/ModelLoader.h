@@ -14,87 +14,35 @@
 #include <algorithm>
 #include <iostream>
 #include <string>
-#include <unordered_map>
+#include <utility>
 #include <vector>
 
 class ModelLoader
 {
 public:
-    // =========================================================================
-    // Static Storage & Model Management (mirrors Shader & Texture)
-    // =========================================================================
-
     static Mesh* Create(
         const std::string& path,
-        const std::string& name = "",
         glm::vec4 defaultColor = glm::vec4(1.0f)
     )
     {
-        std::string name_t = name.empty() ? path : name;
-        auto existing = models.find(name_t);
-        if (existing != models.end())
-        {
-            std::cerr << "ERROR::MODEL_LOADER::ALREADY_EXISTS: " << name_t << std::endl;
-            return &existing->second;
-        }
-
-        Mesh mesh;
-        if (!LoadModelInternal(path, defaultColor, mesh))
-        {
-            std::cerr << "ERROR::MODEL_LOADER::CREATION_FAILED: " << name_t << std::endl;
-            return nullptr;
-        }
-
-        auto [it, inserted] = models.insert_or_assign(name_t, std::move(mesh));
-        return &it->second;
+        return LoadMesh(path, defaultColor);
     }
 
-    // Look up a loaded model mesh by name. Returns nullptr and logs error if missing.
-    static Mesh* Get(const std::string& name)
-    {
-        auto it = models.find(name);
-        if (it == models.end())
-        {
-            std::cerr << "ERROR::MODEL_LOADER::NOT_FOUND: " << name << std::endl;
-            return nullptr;
-        }
-        return &it->second;
-    }
-
-    static bool Has(const std::string& name)
-    {
-        return models.find(name) != models.end();
-    }
-
-    // Loads a Mesh from file (or returns the cached copy if already loaded under `path`).
-    static Mesh LoadMesh(
+    static Mesh* LoadMesh(
         const std::string& path,
         glm::vec4 defaultColor = glm::vec4(1.0f)
     )
     {
-        auto it = models.find(path);
-        if (it != models.end())
+        Mesh* mesh = new Mesh();
+        if (!LoadModelInternal(path, defaultColor, *mesh))
         {
-            return it->second;
+            std::cerr << "ERROR::MODEL_LOADER::CREATION_FAILED: " << path << std::endl;
         }
 
-        Mesh* created = Create(path, path, defaultColor);
-        if (!created)
-        {
-            return Mesh{};
-        }
-
-        return *created;
-    }
-
-    static void Clear()
-    {
-        models.clear();
+        return mesh;
     }
 
 private:
-    inline static std::unordered_map<std::string, Mesh> models;
-
     static glm::mat4 ConvertMatrix(const aiMatrix4x4& from)
     {
         glm::mat4 to;
@@ -132,6 +80,7 @@ private:
         const aiMaterial* mat,
         aiTextureType type,
         const std::string& modelDirectory,
+        std::vector<std::pair<std::string, Texture*>>& loadedTextures,
         Mesh& outMesh
     )
     {
@@ -150,19 +99,27 @@ private:
 
                 const std::string texRelativePath = NormalizeTexturePath(modelDirectory, str.C_Str());
 
-                if (!Texture::Has(texRelativePath))
-                {
-                    Texture::Create(texRelativePath, texRelativePath);
-                }
+                const auto existing = std::find_if(
+                    loadedTextures.begin(),
+                    loadedTextures.end(),
+                    [&texRelativePath](const std::pair<std::string, Texture*>& entry)
+                    {
+                        return entry.first == texRelativePath;
+                    }
+                );
 
-                if (outMesh.textureName.empty())
+                if (existing == loadedTextures.end())
                 {
-                    outMesh.textureName = texRelativePath;
-                }
-
-                if (std::find(outMesh.textureNames.begin(), outMesh.textureNames.end(), texRelativePath) == outMesh.textureNames.end())
-                {
-                    outMesh.textureNames.push_back(texRelativePath);
+                    Texture* tex = Texture::Create(texRelativePath);
+                    if (tex && tex->IsValid())
+                    {
+                        loadedTextures.emplace_back(texRelativePath, tex);
+                        outMesh.textures.push_back(tex);
+                    }
+                    else
+                    {
+                        delete tex;
+                    }
                 }
             }
         }
@@ -174,6 +131,7 @@ private:
         const glm::mat4& transform,
         const std::string& modelDirectory,
         const glm::vec4& defaultColor,
+        std::vector<std::pair<std::string, Texture*>>& loadedTextures,
         Mesh& outMesh
     )
     {
@@ -201,9 +159,9 @@ private:
                     ) * defaultColor;
                 }
 
-                // Load base/diffuse textures (ignoring normal maps, specular maps, etc.)
-                LoadMaterialBaseTextures(material, aiTextureType_DIFFUSE, modelDirectory, outMesh);
-                LoadMaterialBaseTextures(material, aiTextureType_BASE_COLOR, modelDirectory, outMesh);
+                // Load base/diffuse textures into outMesh.textures (std::vector<Texture*>)
+                LoadMaterialBaseTextures(material, aiTextureType_DIFFUSE, modelDirectory, loadedTextures, outMesh);
+                LoadMaterialBaseTextures(material, aiTextureType_BASE_COLOR, modelDirectory, loadedTextures, outMesh);
             }
         }
 
@@ -276,6 +234,7 @@ private:
         const glm::mat4& parentTransform,
         const std::string& modelDirectory,
         const glm::vec4& defaultColor,
+        std::vector<std::pair<std::string, Texture*>>& loadedTextures,
         Mesh& outMesh
     )
     {
@@ -287,12 +246,12 @@ private:
         for (unsigned int i = 0; i < node->mNumMeshes; ++i)
         {
             const aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-            ProcessMesh(mesh, scene, nodeTransform, modelDirectory, defaultColor, outMesh);
+            ProcessMesh(mesh, scene, nodeTransform, modelDirectory, defaultColor, loadedTextures, outMesh);
         }
 
         for (unsigned int i = 0; i < node->mNumChildren; ++i)
         {
-            ProcessNode(node->mChildren[i], scene, nodeTransform, modelDirectory, defaultColor, outMesh);
+            ProcessNode(node->mChildren[i], scene, nodeTransform, modelDirectory, defaultColor, loadedTextures, outMesh);
         }
     }
 
@@ -320,7 +279,8 @@ private:
         }
 
         const std::string modelDirectory = GetDirectory(path);
-        ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f), modelDirectory, defaultColor, outMesh);
+        std::vector<std::pair<std::string, Texture*>> loadedTextures;
+        ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f), modelDirectory, defaultColor, loadedTextures, outMesh);
 
         if (outMesh.vertices.empty() || outMesh.triangles.empty())
         {
@@ -331,4 +291,3 @@ private:
         return true;
     }
 };
-

@@ -9,7 +9,6 @@
 #include <cstring>
 #include <iostream>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -22,133 +21,114 @@ public:
 
     TextureMap() = default;
 
-    // Constructor with optional name at the end (or omitted)
     TextureMap(
         const std::string& path,
-        glm::vec2 size,
-        glm::vec2 offset = glm::vec2(0.0f),
-        int limit = -1,
-        const std::string& name = ""
-    )
-        : size(size),
-          offset(offset),
-          limit(limit),
-          name(name.empty() ? path : name)
-    {
-        LoadAndSlice(path);
-    }
-
-    // Constructor matching Texture's (path, name, ...) ordering
-    TextureMap(
-        const std::string& path,
-        const std::string& name,
         glm::vec2 size,
         glm::vec2 offset = glm::vec2(0.0f),
         int limit = -1
     )
         : size(size),
           offset(offset),
-          limit(limit),
-          name(name.empty() ? path : name)
+          limit(limit)
     {
         LoadAndSlice(path);
     }
 
-    // =========================================================================
-    // Static Storage & TextureMap Management
-    // =========================================================================
-
-    static TextureMap* Create(
-        const std::string& path,
-        glm::vec2 size,
-        glm::vec2 offset = glm::vec2(0.0f),
-        int limit = -1,
-        const std::string& name = ""
-    )
+    ~TextureMap()
     {
-        const std::string baseName = name.empty() ? path : name;
-        if (textureMaps.find(baseName) != textureMaps.end())
+        for (Texture* tex : textures)
         {
-            std::cerr << "ERROR::TEXTURE_MAP::ALREADY_EXISTS: " << baseName << std::endl;
-            return &textureMaps[baseName];
+            delete tex;
         }
-
-        TextureMap map(path, size, offset, limit, baseName);
-        if (!map.valid)
-        {
-            std::cerr << "ERROR::TEXTURE_MAP::CREATION_FAILED: " << baseName << std::endl;
-            return nullptr;
-        }
-
-        auto [it, inserted] = textureMaps.insert_or_assign(baseName, std::move(map));
-        return &it->second;
+        textures.clear();
     }
 
+    TextureMap(const TextureMap&) = delete;
+    TextureMap& operator=(const TextureMap&) = delete;
+
+    TextureMap(TextureMap&& other) noexcept
+        : size(other.size),
+          offset(other.offset),
+          limit(other.limit),
+          textures(std::move(other.textures)),
+          valid(std::exchange(other.valid, false))
+    {
+        other.textures.clear();
+    }
+
+    TextureMap& operator=(TextureMap&& other) noexcept
+    {
+        if (this != &other)
+        {
+            for (Texture* tex : textures)
+            {
+                delete tex;
+            }
+            size = other.size;
+            offset = other.offset;
+            limit = other.limit;
+            textures = std::move(other.textures);
+            other.textures.clear();
+            valid = std::exchange(other.valid, false);
+        }
+        return *this;
+    }
+
+    // =========================================================================
+    // Factory Method (returns caller-owned TextureMap*)
+    // =========================================================================
+
     static TextureMap* Create(
         const std::string& path,
-        const std::string& name,
         glm::vec2 size,
         glm::vec2 offset = glm::vec2(0.0f),
         int limit = -1
     )
     {
-        return Create(path, size, offset, limit, name);
-    }
-
-    static TextureMap* Get(const std::string& name)
-    {
-        auto it = textureMaps.find(name);
-        if (it == textureMaps.end())
+        TextureMap* map = new TextureMap(path, size, offset, limit);
+        if (!map->valid)
         {
-            std::cerr << "ERROR::TEXTURE_MAP::NOT_FOUND: " << name << std::endl;
-            return nullptr;
+            std::cerr << "ERROR::TEXTURE_MAP::CREATION_FAILED: " << path << std::endl;
         }
-        return &it->second;
-    }
-
-    static bool Has(const std::string& name)
-    {
-        return textureMaps.find(name) != textureMaps.end();
+        return map;
     }
 
     // =========================================================================
     // Instance Methods
     // =========================================================================
 
-    const std::string& GetName() const
+    bool IsValid() const
     {
-        return name;
+        return valid;
     }
 
     size_t GetCount() const
     {
-        return textureNames.size();
+        return textures.size();
     }
 
-    const std::vector<std::string>& GetTextureNames() const
+    const std::vector<Texture*>& GetTextures() const
     {
-        return textureNames;
-    }
-
-    std::string GetTextureName(size_t index) const
-    {
-        if (index >= textureNames.size())
-            return "";
-        return textureNames[index];
+        return textures;
     }
 
     Texture* GetTexture(size_t index) const
     {
-        if (index >= textureNames.size())
+        if (index >= textures.size())
+        {
+            std::cerr << "ERROR::TEXTURE_MAP::INDEX_OUT_OF_RANGE: " << index << std::endl;
             return nullptr;
-        return Texture::Get(textureNames[index]);
+        }
+        return textures[index];
+    }
+
+    Texture* operator[](size_t index) const
+    {
+        return GetTexture(index);
     }
 
 private:
-    inline static std::unordered_map<std::string, TextureMap> textureMaps;
-
-    std::string name;
-    std::vector<std::string> textureNames;
+    std::vector<Texture*> textures;
     bool valid = false;
 
     void LoadAndSlice(const std::string& path)
@@ -158,21 +138,21 @@ private:
 
         if (size.x <= 0.0f || size.y <= 0.0f || tileWidth <= 0 || tileHeight <= 0)
         {
-            std::cerr << "ERROR::TEXTURE_MAP::INVALID_SIZE: " << name
+            std::cerr << "ERROR::TEXTURE_MAP::INVALID_SIZE: " << path
                       << " (size must be positive)" << std::endl;
             return;
         }
 
         if (offset.x < 0.0f || offset.y < 0.0f)
         {
-            std::cerr << "ERROR::TEXTURE_MAP::NEGATIVE_OFFSET: " << name
+            std::cerr << "ERROR::TEXTURE_MAP::NEGATIVE_OFFSET: " << path
                       << " (offset cannot be negative)" << std::endl;
             return;
         }
 
         if (limit < -1)
         {
-            std::cerr << "ERROR::TEXTURE_MAP::INVALID_LIMIT: " << name
+            std::cerr << "ERROR::TEXTURE_MAP::INVALID_LIMIT: " << path
                       << " (limit must be -1 or non-negative)" << std::endl;
             return;
         }
@@ -232,18 +212,20 @@ private:
                     std::memcpy(tileBuffer.data() + dstOffset, sheetData + srcOffset, rowBytes);
                 }
 
-                const std::string subTextureName = name + "_" + std::to_string(createdCount);
                 Texture* tex = Texture::CreateFromPixels(
                     tileBuffer.data(),
                     tileWidth,
                     tileHeight,
-                    nrChannels,
-                    subTextureName
+                    nrChannels
                 );
 
-                if (tex)
+                if (tex && tex->IsValid())
                 {
-                    textureNames.push_back(subTextureName);
+                    textures.push_back(tex);
+                }
+                else
+                {
+                    delete tex;
                 }
 
                 ++createdCount;
@@ -254,7 +236,6 @@ private:
         }
 
         stbi_image_free(sheetData);
-        valid = !textureNames.empty();
+        valid = !textures.empty();
     }
 };
-

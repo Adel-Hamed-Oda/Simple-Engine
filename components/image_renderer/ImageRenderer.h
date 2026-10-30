@@ -3,34 +3,19 @@
 #include <glad/gl.h>
 
 #include <cstddef>
-#include <memory>
-#include <string>
-#include <utility>
 
 #include "../Component.h"
 #include "../../core/rendering/material/ImageMaterial.h"
 
 // Screen-space 2D image/quad renderer for HUD, cards, buttons, and menus.
-// Uses an identity view matrix and a screen-space orthographic projection,
-// ignoring Camera::mainCamera and scene lighting.
+// Uses normalized screen coordinates:
+//   - Position (0, 0, 0) is screen center; (0.5, 0.5, 0) is top-right; (-0.5, -0.5, 0) is bottom-left.
+//   - Scale (1, 1, 1) is full screen size; (0.5, 0.5, 1) is half screen width and half screen height.
 class ImageRenderer : public Component
 {
 public:
-    explicit ImageRenderer(
-        std::shared_ptr<ImageMaterial> material = nullptr,
-        int zOrder = 0
-    )
-        : material(material ? std::move(material) : std::make_shared<ImageMaterial>()),
-          zOrder(zOrder)
-    {
-        EnsureQuadInitialized();
-    }
-
-    explicit ImageRenderer(
-        const std::string& textureName,
-        int zOrder = 0
-    )
-        : material(std::make_shared<ImageMaterial>(textureName)),
+    explicit ImageRenderer(ImageMaterial* material, int zOrder = 0)
+        : material(material),
           zOrder(zOrder)
     {
         EnsureQuadInitialized();
@@ -38,12 +23,8 @@ public:
 
     ~ImageRenderer() override = default;
 
-    ImageMaterial* GetMaterial() const { return material.get(); }
-    void SetMaterial(std::shared_ptr<ImageMaterial> value)
-    {
-        if (value)
-            material = std::move(value);
-    }
+    ImageMaterial* GetMaterial() const { return material; }
+    void SetMaterial(ImageMaterial* value) { material = value; }
 
     int GetZOrder() const { return zOrder; }
     void SetZOrder(int value) { zOrder = value; }
@@ -53,7 +34,7 @@ public:
         if (quadVAO == 0 || !transform || !material)
             return;
 
-        if (!material->SetupScreenSpaceUniforms(*transform))
+        if (!material->SetupScreenSpaceUniforms(transform))
             return;
         material->ApplyMaterial();
 
@@ -78,7 +59,7 @@ public:
     }
 
 private:
-    std::shared_ptr<ImageMaterial> material;
+    ImageMaterial* material = nullptr;
     int zOrder = 0;
 
     inline static GLuint quadVAO = 0;

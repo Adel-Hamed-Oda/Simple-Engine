@@ -14,6 +14,7 @@
 #include "rendering/material/Material.h"
 #include "rendering/material/TextMaterial.h"
 #include "rendering/shader/Shader.h"
+#include "rendering/texture/Texture.h"
 #include "rendering/Rendering.h"
 #include "rendering/Window.h"
 

@@ -3,8 +3,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include "../../core/rendering/texture/Texture.h"
+
 #include <cmath>
-#include <string>
 #include <vector>
 
 class Mesh
@@ -18,22 +19,20 @@ public:
     std::vector<glm::vec4> colors;
     std::vector<glm::vec2> uvs;
 
-    // Base texture name(s) loaded via ModelLoader (registered in Texture::Get)
-    std::string textureName = "";
-    std::vector<std::string> textureNames;
+    std::vector<Texture*> textures;
 
-    static Mesh CreateCube(
+    static Mesh* CreateCube(
         glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)
     )
     {
-        Mesh mesh;
+        Mesh* mesh = new Mesh();
 
         // --------------------------------------------------
         // Vertices
         // 4 vertices per face × 6 faces = 24 vertices
         // --------------------------------------------------
 
-        mesh.vertices = {
+        mesh->vertices = {
             // Front (+Z)
             glm::vec3(-0.5f, -0.5f,  0.5f),
             glm::vec3(0.5f, -0.5f,  0.5f),
@@ -75,7 +74,7 @@ public:
         // Triangles
         // --------------------------------------------------
 
-        mesh.triangles = {
+        mesh->triangles = {
             // Front
             0,  1,  2,
             2,  3,  0,
@@ -105,7 +104,7 @@ public:
 		// Colors
         // --------------------------------------------------
 
-        mesh.colors = {
+        mesh->colors = {
             color, color, color, color,
             color, color, color, color,
             color, color, color, color,
@@ -118,7 +117,7 @@ public:
         // Normals
         // --------------------------------------------------
 
-        mesh.normals = {
+        mesh->normals = {
             // Front (+Z)
             glm::vec3(0.0f, 0.0f, 1.0f),
             glm::vec3(0.0f, 0.0f, 1.0f),
@@ -160,7 +159,7 @@ public:
         // UVs
         // --------------------------------------------------
 
-        mesh.uvs = {
+        mesh->uvs = {
             // Front
             glm::vec2(0.0f, 0.0f),
             glm::vec2(1.0f, 0.0f),
@@ -201,14 +200,14 @@ public:
         return mesh;
     }
 
-    static Mesh CreateSphere(
+    static Mesh* CreateSphere(
         float radius = 0.5f,
         unsigned int latitudeBands = 20,
         unsigned int longitudeBands = 20,
         glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)
     )
     {
-        Mesh mesh;
+        Mesh* mesh = new Mesh();
 
         // --------------------------------------------------
         // Vertices, Normals, UVs, and Colors
@@ -237,10 +236,10 @@ public:
                     1.0f - (float)lat / (float)latitudeBands // v increases upward, like the cube
                 );
 
-                mesh.vertices.push_back(normal * radius);
-                mesh.normals.push_back(normal);
-                mesh.uvs.push_back(uv);
-                mesh.colors.push_back(color);
+                mesh->vertices.push_back(normal * radius);
+                mesh->normals.push_back(normal);
+                mesh->uvs.push_back(uv);
+                mesh->colors.push_back(color);
             }
         }
 
@@ -255,27 +254,27 @@ public:
                 unsigned int second = first + longitudeBands + 1;
 
                 // First triangle of quad
-                mesh.triangles.push_back(first);
-                mesh.triangles.push_back(first + 1);
-                mesh.triangles.push_back(second);
+                mesh->triangles.push_back(first);
+                mesh->triangles.push_back(first + 1);
+                mesh->triangles.push_back(second);
 
                 // Second triangle of quad
-                mesh.triangles.push_back(second);
-                mesh.triangles.push_back(first + 1);
-                mesh.triangles.push_back(second + 1);
+                mesh->triangles.push_back(second);
+                mesh->triangles.push_back(first + 1);
+                mesh->triangles.push_back(second + 1);
             }
         }
 
         return mesh;
     }
 
-    static Mesh CreateQuad(
+    static Mesh* CreateQuad(
         glm::vec4 color = glm::vec4(1.0f)
     )
     {
-        Mesh mesh;
+        Mesh* mesh = new Mesh();
 
-        mesh.vertices = {
+        mesh->vertices = {
             // Bottom-left
             glm::vec3(-0.5f, -0.5f, 0.0f),
 
@@ -289,26 +288,26 @@ public:
             glm::vec3(-0.5f,  0.5f, 0.0f)
         };
 
-        mesh.triangles = {
+        mesh->triangles = {
             0, 1, 2,
             2, 3, 0
         };
 
-        mesh.normals = {
+        mesh->normals = {
             glm::vec3(0.0f, 0.0f, 1.0f),
             glm::vec3(0.0f, 0.0f, 1.0f),
             glm::vec3(0.0f, 0.0f, 1.0f),
             glm::vec3(0.0f, 0.0f, 1.0f)
         };
 
-        mesh.colors = {
+        mesh->colors = {
             color,
             color,
             color,
             color
         };
 
-        mesh.uvs = {
+        mesh->uvs = {
             glm::vec2(0.0f, 0.0f),
             glm::vec2(1.0f, 0.0f),
             glm::vec2(1.0f, 1.0f),

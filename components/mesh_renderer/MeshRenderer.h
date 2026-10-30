@@ -4,30 +4,29 @@
 
 #include "../Component.h"
 #include "Mesh.h"
-
-#include <memory>
-#include <string>
-
-class Material;
+#include "../../core/rendering/material/Material.h"
 
 class MeshRenderer : public Component
 {
 public:
-    MeshRenderer(const Mesh& mesh, std::shared_ptr<Material> material)
-        : mesh(mesh), material(std::move(material))
+    MeshRenderer(Mesh* mesh, Material* material)
+        : mesh(mesh),
+          material(material)
     {
         InitializeBuffers();
     }
+
     ~MeshRenderer()
     {
         CleanupBuffers();
     }
 
-    const Mesh* GetMesh() const
+    Mesh* GetMesh() const
     {
-        return &mesh;
+        return mesh;
     }
-    void SetMesh(const Mesh& mesh)
+
+    void SetMesh(Mesh* mesh)
     {
         CleanupBuffers();
         this->mesh = mesh;
@@ -36,13 +35,12 @@ public:
 
     Material* GetMaterial() const
     {
-        return material.get();
+        return material;
     }
-    // Shared ownership: the material stays alive as long as any renderer uses it,
-    // and one material can be shared by many renderers.
-    void SetMaterial(std::shared_ptr<Material> material)
+
+    void SetMaterial(Material* material)
     {
-        this->material = std::move(material);
+        this->material = material;
     }
 
     void Draw() const
@@ -80,8 +78,8 @@ public:
     }
 
 private:
-    Mesh mesh;
-    std::shared_ptr<Material> material;
+    Mesh* mesh = nullptr;
+    Material* material = nullptr;
 
     unsigned int VAO = 0;
     unsigned int lightingVAO = 0;
@@ -99,7 +97,7 @@ private:
     {
         if (!CheckMeshValidity()) return;
 
-        indicesCount = mesh.triangles.size();
+        indicesCount = mesh->triangles.size();
 
         // ==================================================
         // Position VBO
@@ -109,7 +107,7 @@ private:
 
         glBindBuffer(GL_ARRAY_BUFFER, posVBO);
 
-        glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(glm::vec3), mesh.vertices.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, mesh->vertices.size() * sizeof(glm::vec3), mesh->vertices.data(), GL_STATIC_DRAW);
 
         // ==================================================
         // Triangle EBO
@@ -119,7 +117,7 @@ private:
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, triangleEBO);
 
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.triangles.size() * sizeof(unsigned int), mesh.triangles.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh->triangles.size() * sizeof(unsigned int), mesh->triangles.data(), GL_STATIC_DRAW);
 
         // ==================================================
         // Main VAO
@@ -143,13 +141,13 @@ private:
         // Normal - location 1
         // --------------------------------------------------
 
-        if (!mesh.normals.empty() &&
-            mesh.normals.size() == mesh.vertices.size())
+        if (!mesh->normals.empty() &&
+            mesh->normals.size() == mesh->vertices.size())
         {
             glGenBuffers(1, &normalVBO);
 
             glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
-            glBufferData(GL_ARRAY_BUFFER, mesh.normals.size() * sizeof(glm::vec3), mesh.normals.data(), GL_STATIC_DRAW);
+            glBufferData(GL_ARRAY_BUFFER, mesh->normals.size() * sizeof(glm::vec3), mesh->normals.data(), GL_STATIC_DRAW);
 
             glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), nullptr);
 
@@ -160,13 +158,13 @@ private:
         // Color - location 2
         // --------------------------------------------------
 
-        if (!mesh.colors.empty() &&
-            mesh.colors.size() == mesh.vertices.size())
+        if (!mesh->colors.empty() &&
+            mesh->colors.size() == mesh->vertices.size())
         {
             glGenBuffers(1, &colorVBO);
 
             glBindBuffer(GL_ARRAY_BUFFER, colorVBO);
-            glBufferData(GL_ARRAY_BUFFER, mesh.colors.size() * sizeof(glm::vec4), mesh.colors.data(), GL_STATIC_DRAW);
+            glBufferData(GL_ARRAY_BUFFER, mesh->colors.size() * sizeof(glm::vec4), mesh->colors.data(), GL_STATIC_DRAW);
 
             glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), nullptr);
 
@@ -177,13 +175,13 @@ private:
         // UV - location 3
         // --------------------------------------------------
 
-        if (!mesh.uvs.empty() &&
-            mesh.uvs.size() == mesh.vertices.size())
+        if (!mesh->uvs.empty() &&
+            mesh->uvs.size() == mesh->vertices.size())
         {
             glGenBuffers(1, &uvVBO);
 
             glBindBuffer(GL_ARRAY_BUFFER, uvVBO);
-            glBufferData(GL_ARRAY_BUFFER, mesh.uvs.size() * sizeof(glm::vec2), mesh.uvs.data(), GL_STATIC_DRAW);
+            glBufferData(GL_ARRAY_BUFFER, mesh->uvs.size() * sizeof(glm::vec2), mesh->uvs.data(), GL_STATIC_DRAW);
 
             glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), nullptr);
 
@@ -280,8 +278,9 @@ private:
 
     bool CheckMeshValidity() const
     {
-        if (mesh.vertices.empty() ||
-            mesh.triangles.empty())
+        if (!mesh ||
+            mesh->vertices.empty() ||
+            mesh->triangles.empty())
         {
             return false;
         }

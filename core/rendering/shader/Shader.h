@@ -4,31 +4,22 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "../../../Config.h"
 #include "../../statics/FallBacks.h"
 
 #include <fstream>
 #include <iostream>
-#include <memory>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
-// Owns an OpenGL shader program. Move-only (the destructor deletes the program).
-//
-// Failure convention:
-//   Create / CreateFromFiles / Get never return nullptr. On failure or a missing name they log an
-//   error and return the fallback shader. The fallback itself may be invalid (ID == 0) if even it
-//   failed to compile; use() and the uniform setters are safe no-ops on an invalid shader.
-//
-// Lifetime:
-//   Shaders live in a static map. Call Shader::Clear() BEFORE destroying the GL context/window,
-//   otherwise the static destructors run after the context is gone and glDeleteProgram is UB.
 class Shader
 {
 public:
     GLuint ID = 0;
+
+    Shader() = default;
 
     Shader(const std::string& vertexCode, const std::string& fragmentCode)
     {
@@ -46,23 +37,24 @@ public:
             return;
         }
 
-        ID = glCreateProgram();
-        glAttachShader(ID, vertex);
-        glAttachShader(ID, fragment);
-        glLinkProgram(ID);
+        GLuint programID = glCreateProgram();
+        glAttachShader(programID, vertex);
+        glAttachShader(programID, fragment);
+        glLinkProgram(programID);
 
         GLint success = 0;
-        glGetProgramiv(ID, GL_LINK_STATUS, &success);
+        glGetProgramiv(programID, GL_LINK_STATUS, &success);
         if (!success)
         {
-            std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << GetProgramLog(ID) << std::endl;
-            glDeleteProgram(ID);
-            ID = 0;
+            std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << GetProgramLog(programID) << std::endl;
+            glDeleteProgram(programID);
+            programID = 0;
         }
 
-        // Shader objects are no longer needed once linking has been attempted.
         glDeleteShader(vertex);
         glDeleteShader(fragment);
+
+        ID = programID;
     }
 
     ~Shader()
@@ -75,9 +67,7 @@ public:
     Shader& operator=(const Shader&) = delete;
 
     Shader(Shader&& other) noexcept
-        : ID(std::exchange(other.ID, 0)),
-          name(std::move(other.name)),
-          uniformLocations(std::move(other.uniformLocations))
+        : ID(std::exchange(other.ID, 0))
     {
     }
 
@@ -87,108 +77,64 @@ public:
         {
             if (ID != 0)
                 glDeleteProgram(ID);
-
             ID = std::exchange(other.ID, 0);
-            name = std::move(other.name);
-            uniformLocations = std::move(other.uniformLocations);
         }
         return *this;
     }
 
     // =========================================================================
-    // Static Storage & Shader Management
+    // Factory Methods (return caller-owned Shader*)
     // =========================================================================
 
-    // Creates a shader from a base path (e.g. "default" -> "default.vert" & "default.frag")
-    // and stores it in the lookup map under `name` (defaults to `path`).
-    static Shader* Create(const std::string& path, const std::string& name = "")
+    // Creates a shader from a base path (e.g. "shaders/Image" -> "shaders/Image.vert" & "shaders/Image.frag").
+    static Shader* Create(const std::string& basePath)
     {
-        return CreateFromFiles(path + ".vert", path + ".frag", name.empty() ? path : name);
+        return CreateFromFiles(basePath + ".vert", basePath + ".frag");
     }
 
-    // Creates a shader from explicit vertex and fragment paths and stores it in the lookup map.
-    // (Named differently from Create so that Create("a.vert", "a.frag") can't silently bind to
-    //  the (path, name) overload.)
-    static Shader* CreateFromFiles(const std::string& vertexPath, const std::string& fragmentPath, const std::string& name)
+    // Creates a shader from explicit vertex and fragment file paths relative to CONFIG::DIRECTORY::SHADERS.
+    static Shader* CreateFromFiles(const std::string& vertexPath, const std::string& fragmentPath)
     {
-        auto existing = shaders.find(name);
-        if (existing != shaders.end())
-        {
-            std::cerr << "ERROR::SHADER::ALREADY_EXISTS: " << name << std::endl;
-            return existing->second.get();
-        }
-
         const std::string vertexCode = ReadFile(vertexPath);
         const std::string fragmentCode = ReadFile(fragmentPath);
 
-        auto shader = std::make_unique<Shader>(vertexCode, fragmentCode);
-        if (shader->ID == 0)
+        Shader* shader = new Shader(vertexCode, fragmentCode);
+        if (!shader->IsValid())
         {
-            std::cerr << "ERROR::SHADER::CREATION_FAILED: " << name << std::endl;
-            return GetFallback();
+            std::cerr << "ERROR::SHADER::CREATION_FAILED: " << vertexPath << " / " << fragmentPath << std::endl;
+            delete shader;
+            return CreateFallback();
         }
 
-        shader->name = name;
-        auto [it, inserted] = shaders.emplace(name, std::move(shader));
-        return it->second.get();
+        return shader;
     }
 
-    // Creates a shader directly from vertex and fragment source code strings and stores it in the lookup map.
-    static Shader* CreateFromSource(const std::string& vertexCode, const std::string& fragmentCode, const std::string& name)
+    // Creates a shader directly from vertex and fragment GLSL source strings.
+    static Shader* CreateFromSource(const std::string& vertexCode, const std::string& fragmentCode)
     {
-        auto existing = shaders.find(name);
-        if (existing != shaders.end())
+        Shader* shader = new Shader(vertexCode, fragmentCode);
+        if (!shader->IsValid())
         {
-            return existing->second.get();
+            std::cerr << "ERROR::SHADER::CREATION_FROM_SOURCE_FAILED" << std::endl;
+            delete shader;
+            return CreateFallback();
         }
 
-        auto shader = std::make_unique<Shader>(vertexCode, fragmentCode);
-        if (shader->ID == 0)
-        {
-            std::cerr << "ERROR::SHADER::CREATION_FAILED: " << name << std::endl;
-            return GetFallback();
-        }
-
-        shader->name = name;
-        auto [it, inserted] = shaders.emplace(name, std::move(shader));
-        return it->second.get();
+        return shader;
     }
 
-    // Looks up a shader by name. Logs an error and returns the fallback shader if missing.
-    static Shader* Get(const std::string& name)
+    // Compiles and returns the fallback checker shader.
+    static Shader* CreateFallback()
     {
-        auto it = shaders.find(name);
-        if (it == shaders.end())
-        {
-            std::cerr << "ERROR::SHADER::NOT_FOUND: " << name << std::endl;
-            return GetFallback();
-        }
-        return it->second.get();
-    }
-
-    // Returns the fallback shader, creating it on first use. Never nullptr.
-    static Shader* GetFallback()
-    {
-        if (!fallbackShader)
-            CreateFallbackShader();
-        return fallbackShader.get();
-    }
-
-    // Deletes every stored shader (and the fallback). Call while the GL context is still alive.
-    static void Clear()
-    {
-        shaders.clear();
-        fallbackShader.reset();
+        Shader* fallback = new Shader(FallBacks::VertexShaderCode, FallBacks::FragmentShaderCode);
+        if (!fallback->IsValid())
+            std::cerr << "ERROR::SHADER::FALLBACK_SHADER_CREATION_FAILED" << std::endl;
+        return fallback;
     }
 
     // =========================================================================
-    // Shader Instance Methods
+    // Instance Methods
     // =========================================================================
-
-    const std::string& GetName() const
-    {
-        return name;
-    }
 
     bool IsValid() const
     {
@@ -201,52 +147,49 @@ public:
             glUseProgram(ID);
     }
 
-    // NOTE: the setters below use glUniform*, which affects the currently bound program.
-    // Call use() first. (On GL 4.1+ you could switch to glProgramUniform* to drop that requirement.)
-
-    void setBool(const std::string& uniformName, bool value)
+    void setBool(const std::string& uniformName, bool value) const
     {
         GLint location = GetUniformLocation(uniformName);
         if (location != -1)
             glUniform1i(location, static_cast<int>(value));
     }
 
-    void setInt(const std::string& uniformName, int value)
+    void setInt(const std::string& uniformName, int value) const
     {
         GLint location = GetUniformLocation(uniformName);
         if (location != -1)
             glUniform1i(location, value);
     }
 
-    void setFloat(const std::string& uniformName, float value)
+    void setFloat(const std::string& uniformName, float value) const
     {
         GLint location = GetUniformLocation(uniformName);
         if (location != -1)
             glUniform1f(location, value);
     }
 
-    void setVec2(const std::string& uniformName, const glm::vec2& value)
+    void setVec2(const std::string& uniformName, const glm::vec2& value) const
     {
         GLint location = GetUniformLocation(uniformName);
         if (location != -1)
             glUniform2fv(location, 1, glm::value_ptr(value));
     }
 
-    void setVec3(const std::string& uniformName, const glm::vec3& value)
+    void setVec3(const std::string& uniformName, const glm::vec3& value) const
     {
         GLint location = GetUniformLocation(uniformName);
         if (location != -1)
             glUniform3fv(location, 1, glm::value_ptr(value));
     }
 
-    void setVec4(const std::string& uniformName, const glm::vec4& value)
+    void setVec4(const std::string& uniformName, const glm::vec4& value) const
     {
         GLint location = GetUniformLocation(uniformName);
         if (location != -1)
             glUniform4fv(location, 1, glm::value_ptr(value));
     }
 
-    void setMat4(const std::string& uniformName, const glm::mat4& value)
+    void setMat4(const std::string& uniformName, const glm::mat4& value) const
     {
         GLint location = GetUniformLocation(uniformName);
         if (location != -1)
@@ -254,24 +197,12 @@ public:
     }
 
 private:
-    inline static std::unordered_map<std::string, std::unique_ptr<Shader>> shaders;
-    inline static std::unique_ptr<Shader> fallbackShader;
-
-    std::string name;
-    std::unordered_map<std::string, GLint> uniformLocations;
-
-    GLint GetUniformLocation(const std::string& uniformName)
+    GLint GetUniformLocation(const std::string& uniformName) const
     {
         if (ID == 0)
             return -1;
 
-        auto it = uniformLocations.find(uniformName);
-        if (it != uniformLocations.end())
-            return it->second;
-
-        GLint location = glGetUniformLocation(ID, uniformName.c_str());
-        uniformLocations.emplace(uniformName, location);
-        return location;
+        return glGetUniformLocation(ID, uniformName.c_str());
     }
 
     static std::string ReadFile(const std::string& filepath)
@@ -333,14 +264,5 @@ private:
         }
 
         return shader;
-    }
-
-    static void CreateFallbackShader()
-    {
-        fallbackShader = std::make_unique<Shader>(FallBacks::VertexShaderCode, FallBacks::FragmentShaderCode);
-        fallbackShader->name = "__fallback__";
-
-        if (fallbackShader->ID == 0)
-            std::cerr << "ERROR::SHADER::FALLBACK_SHADER_CREATION_FAILED" << std::endl;
     }
 };

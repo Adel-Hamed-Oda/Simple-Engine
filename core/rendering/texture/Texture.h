@@ -5,13 +5,11 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <stb_image.h>
 
-#include "Config.h"
+#include "../../../Config.h"
 
-#include <fstream>
 #include <iostream>
-#include <sstream>
 #include <string>
-#include <unordered_map>
+#include <utility>
 
 enum class TextureWrapMode
 {
@@ -40,17 +38,24 @@ public:
     TextureFilterMode filterMode = TextureFilterMode::LINEAR;
 
     Texture() = default;
-    Texture(const std::string& shaderPath)
-    {
-        std::string fullPath = CONFIG::DIRECTORY::TEXTURES + shaderPath;
 
-        stbi_set_flip_vertically_on_load(true); // Flip the image vertically on load
-        int width, height, nrChannels;
-        unsigned char *data = stbi_load(fullPath.c_str(), &width, &height, &nrChannels, 0);
+    explicit Texture(
+        const std::string& texturePath,
+        TextureWrapMode wrap = TextureWrapMode::REPEAT,
+        TextureFilterMode filter = TextureFilterMode::LINEAR
+    )
+        : wrapMode(wrap),
+          filterMode(filter)
+    {
+        const std::string fullPath = CONFIG::DIRECTORY::TEXTURES + texturePath;
+
+        stbi_set_flip_vertically_on_load(true);
+        int width = 0, height = 0, nrChannels = 0;
+        unsigned char* data = stbi_load(fullPath.c_str(), &width, &height, &nrChannels, 0);
 
         if (!data)
         {
-            std::cerr << "ERROR::TEXTURE::FILE_NOT_FOUND_OR_READ_FAILED: " << shaderPath << std::endl;
+            std::cerr << "ERROR::TEXTURE::FILE_NOT_FOUND_OR_READ_FAILED: " << texturePath << std::endl;
             stbi_set_flip_vertically_on_load(false);
             return;
         }
@@ -78,29 +83,51 @@ public:
         UploadToGPU(data, width, height, nrChannels);
     }
 
-    // =========================================================================
-    // Static Storage & Texture Management
-    // =========================================================================
-
-    static Texture* Create(const std::string& path, const std::string& name = "")
+    ~Texture()
     {
-        std::string name_t = name.empty() ? path : name;
-        if (textures.find(name_t) != textures.end())
-        {
-            std::cerr << "ERROR::TEXTURE::ALREADY_EXISTS: " << name_t << std::endl;
-            return &textures[name_t];
-        }
+        if (ID != 0)
+            glDeleteTextures(1, &ID);
+    }
 
-        Texture texture(path);
-        if (texture.ID == 0)
-        {
-            std::cerr << "ERROR::TEXTURE::CREATION_FAILED: " << name_t << std::endl;
-            return nullptr;
-        }
+    Texture(const Texture&) = delete;
+    Texture& operator=(const Texture&) = delete;
 
-        texture.name = name_t;
-        auto [it, inserted] = textures.insert_or_assign(name_t, std::move(texture));
-        return &it->second;
+    Texture(Texture&& other) noexcept
+        : ID(std::exchange(other.ID, 0)),
+          wrapMode(other.wrapMode),
+          filterMode(other.filterMode)
+    {
+    }
+
+    Texture& operator=(Texture&& other) noexcept
+    {
+        if (this != &other)
+        {
+            if (ID != 0)
+                glDeleteTextures(1, &ID);
+            ID = std::exchange(other.ID, 0);
+            wrapMode = other.wrapMode;
+            filterMode = other.filterMode;
+        }
+        return *this;
+    }
+
+    // =========================================================================
+    // Factory Methods (return caller-owned Texture*)
+    // =========================================================================
+
+    static Texture* Create(
+        const std::string& path,
+        TextureWrapMode wrap = TextureWrapMode::REPEAT,
+        TextureFilterMode filter = TextureFilterMode::LINEAR
+    )
+    {
+        Texture* texture = new Texture(path, wrap, filter);
+        if (!texture->IsValid())
+        {
+            std::cerr << "ERROR::TEXTURE::CREATION_FAILED: " << path << std::endl;
+        }
+        return texture;
     }
 
     static Texture* CreateFromPixels(
@@ -108,70 +135,33 @@ public:
         int width,
         int height,
         int nrChannels,
-        const std::string& name,
         TextureWrapMode wrap = TextureWrapMode::REPEAT,
         TextureFilterMode filter = TextureFilterMode::LINEAR
     )
     {
-        if (name.empty())
+        Texture* texture = new Texture(data, width, height, nrChannels, wrap, filter);
+        if (!texture->IsValid())
         {
-            std::cerr << "ERROR::TEXTURE::EMPTY_NAME" << std::endl;
-            return nullptr;
+            std::cerr << "ERROR::TEXTURE::CREATION_FROM_PIXELS_FAILED" << std::endl;
         }
-
-        if (textures.find(name) != textures.end())
-        {
-            std::cerr << "ERROR::TEXTURE::ALREADY_EXISTS: " << name << std::endl;
-            return &textures[name];
-        }
-
-        Texture texture(data, width, height, nrChannels, wrap, filter);
-        if (texture.ID == 0)
-        {
-            std::cerr << "ERROR::TEXTURE::CREATION_FAILED: " << name << std::endl;
-            return nullptr;
-        }
-
-        texture.name = name;
-        auto [it, inserted] = textures.insert_or_assign(name, std::move(texture));
-        return &it->second;
-    }
-
-    // Look up texture in map. Returns nullptr and logs error if missing.
-    static Texture* Get(const std::string& name)
-    {
-        auto it = textures.find(name);
-        if (it == textures.end())
-        {
-            std::cerr << "ERROR::TEXTURE::NOT_FOUND: " << name << std::endl;
-            return nullptr;
-        }
-        return &it->second;
-    }
-
-    static bool Has(const std::string& name)
-    {
-        return textures.find(name) != textures.end();
+        return texture;
     }
 
     // =========================================================================
     // Instance Methods
     // =========================================================================
 
-    const std::string& GetName() const
+    bool IsValid() const
     {
-        return name;
+        return ID != 0;
     }
 
 private:
-    inline static std::unordered_map<std::string, Texture> textures;
-
-    std::string name;
-
     void UploadToGPU(const unsigned char* data, int width, int height, int nrChannels)
     {
-        glGenTextures(1, &ID);
-        glBindTexture(GL_TEXTURE_2D, ID);
+        unsigned int texID = 0;
+        glGenTextures(1, &texID);
+        glBindTexture(GL_TEXTURE_2D, texID);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, static_cast<GLenum>(wrapMode));
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, static_cast<GLenum>(wrapMode));
@@ -185,9 +175,11 @@ private:
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
         glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
         glGenerateMipmap(GL_TEXTURE_2D);
+
+        ID = texID;
     }
 
-    GLenum GetFormatFromChannels(int nrChannels)
+    static GLenum GetFormatFromChannels(int nrChannels)
     {
         switch (nrChannels)
         {
@@ -196,10 +188,9 @@ private:
             case 3: return GL_RGB;
             case 4: return GL_RGBA;
             default:
-                std::cerr << "ERROR::TEXTURE::" + name + "::UNSUPPORTED_CHANNEL_COUNT: "
+                std::cerr << "ERROR::TEXTURE::UNSUPPORTED_CHANNEL_COUNT: "
                           << nrChannels << std::endl;
-                return GL_RGB; // Default to RGB if unsupported
+                return GL_RGB;
         }
     }
-    
 };

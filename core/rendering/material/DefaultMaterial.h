@@ -1,7 +1,5 @@
 #pragma once
 
-#include <string>
-
 #include <glm/glm.hpp>
 
 #include "Material.h"
@@ -10,35 +8,38 @@
 class DefaultMaterial : public Material
 {
 public:
-	std::string textureName = "";
+	Texture* texture = nullptr;
 	glm::vec3 baseColor = glm::vec3(1.0f, 1.0f, 1.0f);
 	glm::vec3 ambient = glm::vec3(0.1f, 0.1f, 0.1f);
 	float specularStrength = 0.5f;
 	float shininess = 32.0f;
 
-	explicit DefaultMaterial(
-		const std::string& shaderName = ""
-	) : Material(shaderName) {}
+	DefaultMaterial() = default;
+
+	explicit DefaultMaterial(Shader* shader, Texture* texture = nullptr)
+		: Material(shader),
+		  texture(texture) {}
 
 	~DefaultMaterial() override = default;
 
+	static DefaultMaterial* Create(Shader* shader, Texture* texture = nullptr)
+	{
+		return new DefaultMaterial(shader, texture);
+	}
+
+	Texture* GetTexture() const { return texture; }
+	bool HasTexture() const { return texture != nullptr && texture->IsValid(); }
+
+	void SetTexture(Texture* tex) { texture = tex; }
+	void ClearTexture() { texture = nullptr; }
+
 	void ApplyMaterial() override
 	{
-		if (!shader) return;
+		if (!shader || !shader->IsValid()) return;
 
-		bool hasTexture = false;
+		const bool hasTexture = HasTexture();
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, 0);
-
-		if (!textureName.empty())
-		{
-			Texture* texture = Texture::Get(textureName);
-			if (texture)
-			{
-				glBindTexture(GL_TEXTURE_2D, texture->ID);
-				hasTexture = true;
-			}
-		}
+		glBindTexture(GL_TEXTURE_2D, hasTexture ? texture->ID : 0);
 
 		shader->setBool("material.hasTexture", hasTexture);
 		shader->setInt("material.textureSampler", 0);

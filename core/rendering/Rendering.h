@@ -78,7 +78,7 @@ public:
 			if (!obj || !obj->transform)
 				continue;
 
-			Transform& transform = *obj->transform;
+			Transform* transform = obj->transform.get();
 
 			if (MeshRenderer* meshRenderer =
 					obj->GetComponent<MeshRenderer>())
@@ -171,13 +171,12 @@ private:
         }
     };
 
-    // C++17 or later: inline static avoids a separate definition in a .cpp.
     inline static std::vector<TextRenderer*> deferredWorldTextRenderers{};
     inline static std::vector<ScreenDrawItem> deferredScreenDrawItems{};
 
-    static void SendLights(Shader* shader)
+    static void SendLights(const Shader* shader)
     {
-        if (!shader)
+        if (!shader || !shader->IsValid())
             return;
 
         const auto& lights = LightSource::allLights;

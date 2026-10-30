@@ -4,14 +4,13 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
-#include <string>
 
 #include "../../statics/PublicDomain.h"
 #include "../../../components/camera/Camera.h"
 #include "../../transform/Transform.h"
 #include "../shader/Shader.h"
 
-// A Material is shared, per-shader *data* (colors, shininess, ...).
+// A Material holds shared, per-shader data (colors, textures, shininess, ...).
 // It is NOT a Component: it isn't attached to one GameObject, so it has no
 // transform of its own. The object being drawn passes its Transform in.
 class Material
@@ -19,24 +18,24 @@ class Material
 public:
 	Shader* shader = nullptr;
 
-	explicit Material(const std::string& shaderName)
+	Material() = default;
+
+	explicit Material(Shader* shader)
+		: shader(shader)
 	{
-		shader = Shader::Get(shaderName);
-		if (!shader)
+		if (!this->shader || !this->shader->IsValid())
 		{
-			std::cerr
-				<< "ERROR::MATERIAL::SHADER_NOT_FOUND: "
-				<< shaderName
-				<< std::endl;
+			std::cerr << "ERROR::MATERIAL::INVALID_SHADER" << std::endl;
 		}
 	}
+
 	virtual ~Material() = default;
 
 	// Binds the shader program, then uploads model/view/projection/viewer position.
 	// Returns false if the object can't be drawn (missing shader or camera).
-	bool SetupCoreUniforms(const Transform& transform) const
+	bool SetupCoreUniforms(const Transform* transform) const
 	{
-		if (!shader || shader->ID == 0) return false;
+		if (!transform || !shader || !shader->IsValid()) return false;
 
 		if (!Camera::mainCamera || !Camera::mainCamera->transform)
 		{
@@ -48,7 +47,7 @@ public:
 		// so the program MUST be bound before any setXxx() call.
 		shader->use();
 
-		shader->setMat4("model", transform.GetModelMatrix());
+		shader->setMat4("model", transform->GetModelMatrix());
 		shader->setMat4("view", Camera::mainCamera->GetViewMatrix());
 		shader->setMat4("projection", Camera::mainCamera->GetProjectionMatrix(GetAspectRatio()));
 		shader->setVec3("viewingPosition", Camera::mainCamera->transform->position);
@@ -56,23 +55,33 @@ public:
 		return true;
 	}
 
+	bool SetupCoreUniforms(const Transform& transform) const
+	{
+		return SetupCoreUniforms(&transform);
+	}
+
 	// Binds the shader program, then uploads model, identity view, and normalized screen-space orthographic projection.
 	// Screen space spans [-0.5, +0.5] horizontally and [-0.5, +0.5] vertically:
 	//   - Position (0, 0, 0) is exact center; (0.5, 0.5, 0) is top-right; (-0.5, -0.5, 0) is bottom-left.
 	//   - Scale (1, 1, 1) is full screen width & height; (0.5, 0.5, 1) is half screen width & height.
-	bool SetupScreenSpaceUniforms(const Transform& transform) const
+	bool SetupScreenSpaceUniforms(const Transform* transform) const
 	{
-		if (!shader || shader->ID == 0) return false;
+		if (!transform || !shader || !shader->IsValid()) return false;
 
 		const glm::mat4 orthoProjection = glm::ortho(-0.5f, 0.5f, -0.5f, 0.5f, -10.0f, 10.0f);
 
 		shader->use();
 
-		shader->setMat4("model", transform.GetModelMatrix());
+		shader->setMat4("model", transform->GetModelMatrix());
 		shader->setMat4("view", glm::mat4(1.0f));
 		shader->setMat4("projection", orthoProjection);
 
 		return true;
+	}
+
+	bool SetupScreenSpaceUniforms(const Transform& transform) const
+	{
+		return SetupScreenSpaceUniforms(&transform);
 	}
 
 	// Uploads this material's own properties (called after SetupCoreUniforms / SetupScreenSpaceUniforms).

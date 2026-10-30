@@ -10,12 +10,11 @@
 #include <iostream>
 #include <limits>
 #include <map>
-#include <memory>
 #include <string>
 #include <utility>
 
 #include "../Component.h"
-#include "../../core/rendering/material/TextMaterial.h"   // adjust to your layout
+#include "../../core/rendering/material/TextMaterial.h"
 
 // Base text renderer:
 // - In World Space (WorldTextRenderer): the string is laid out in the object's local XY plane,
@@ -30,14 +29,14 @@ public:
     TextRenderer(
         std::string text,
         std::string fontPath,
-        unsigned int pixelSize = 48,
-        std::shared_ptr<TextMaterial> material = nullptr,
+        unsigned int pixelSize,
+        TextMaterial* material,
         int zOrder = 0
     )
         : text(std::move(text)),
           fontPath(std::move(fontPath)),
           pixelSize(pixelSize),
-          material(material ? std::move(material) : std::make_shared<TextMaterial>("Text")),
+          material(material),
           zOrder(zOrder)
     {
         Initialize();
@@ -62,12 +61,8 @@ public:
     void SetText(const std::string& value) { text = value; }
     const std::string& GetText() const { return text; }
 
-    TextMaterial* GetMaterial() const { return material.get(); }
-    void SetMaterial(std::shared_ptr<TextMaterial> value)
-    {
-        if (value)
-            material = std::move(value);
-    }
+    TextMaterial* GetMaterial() const { return material; }
+    void SetMaterial(TextMaterial* value) { material = value; }
 
     void Render() const
     {
@@ -79,8 +74,8 @@ public:
         // World-space text uses the main camera's view/projection.
         // Screen-space text uses an identity view and screen orthographic projection.
         const bool uniformsReady = screenSpace
-            ? material->SetupScreenSpaceUniforms(*transform)
-            : material->SetupCoreUniforms(*transform);
+            ? material->SetupScreenSpaceUniforms(transform)
+            : material->SetupCoreUniforms(transform);
 
         if (!uniformsReady)
             return;
@@ -179,7 +174,7 @@ public:
             const float y0 = screenSpace ? ((ypos - centerY) * invHeight) : ypos;
             const float y1 = screenSpace ? ((ypos + h - centerY) * invHeight) : (ypos + h);
 
-            // World space is y-up. The bitmap's first row is the TOP of the glyph,
+            // World space is y-up. The bitmap's  first row is the TOP of the glyph,
             // so the top edge uses v = 0. Counter-clockwise when viewed from +Z.
             const float vertices[6][4] = {
                 { x0, y0, 0.0f, 1.0f },  // bottom-left
@@ -225,7 +220,7 @@ private:
     std::string text;
     std::string fontPath;
     unsigned int pixelSize;
-    std::shared_ptr<TextMaterial> material;
+    TextMaterial* material = nullptr;
     int zOrder = 0;
 
     std::map<char, Character> glyphs;
