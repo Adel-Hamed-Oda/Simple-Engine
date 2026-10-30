@@ -7,9 +7,11 @@
 
 #include "../../../Config.h"
 
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <utility>
+#include <vector>
 
 enum class TextureWrapMode
 {
@@ -113,7 +115,7 @@ public:
     }
 
     // =========================================================================
-    // Factory Methods (return caller-owned Texture*)
+    // Factory Methods (return caller-owned Texture* / std::vector<Texture*>)
     // =========================================================================
 
     static Texture* Create(
@@ -145,6 +147,128 @@ public:
             std::cerr << "ERROR::TEXTURE::CREATION_FROM_PIXELS_FAILED" << std::endl;
         }
         return texture;
+    }
+
+    // Slices a texture sheet / atlas into individual Texture* instances left-to-right, top-to-bottom.
+    // - size: pixel dimensions (width, height) of each tile (must be positive).
+    // - offset: pixel padding/offset between tiles (cannot be negative).
+    // - limit: -1 for no limit, otherwise caps the maximum number of textures created.
+    static std::vector<Texture*> CreateTextureMap(
+        const std::string& path,
+        glm::vec2 size,
+        glm::vec2 offset = glm::vec2(0.0f),
+        int limit = -1,
+        TextureWrapMode wrap = TextureWrapMode::REPEAT,
+        TextureFilterMode filter = TextureFilterMode::LINEAR
+    )
+    {
+        std::vector<Texture*> textures;
+
+        const int tileWidth = static_cast<int>(size.x);
+        const int tileHeight = static_cast<int>(size.y);
+
+        if (size.x <= 0.0f || size.y <= 0.0f || tileWidth <= 0 || tileHeight <= 0)
+        {
+            std::cerr << "ERROR::TEXTURE::TEXTURE_MAP::INVALID_SIZE: " << path
+                      << " (size must be positive)" << std::endl;
+            return textures;
+        }
+
+        if (offset.x < 0.0f || offset.y < 0.0f)
+        {
+            std::cerr << "ERROR::TEXTURE::TEXTURE_MAP::NEGATIVE_OFFSET: " << path
+                      << " (offset cannot be negative)" << std::endl;
+            return textures;
+        }
+
+        if (limit < -1)
+        {
+            std::cerr << "ERROR::TEXTURE::TEXTURE_MAP::INVALID_LIMIT: " << path
+                      << " (limit must be -1 or non-negative)" << std::endl;
+            return textures;
+        }
+
+        const int offsetX = static_cast<int>(offset.x);
+        const int offsetY = static_cast<int>(offset.y);
+
+        const std::string fullPath = CONFIG::DIRECTORY::TEXTURES + path;
+
+        // Load unflipped so tile 0 starts at top-left (x = 0, y = 0) and advances
+        // left-to-right, top-to-bottom; each individual tile is flipped vertically
+        // before uploading to OpenGL so its UV orientation matches Texture::Create().
+        stbi_set_flip_vertically_on_load(false);
+        int sheetWidth = 0, sheetHeight = 0, nrChannels = 0;
+        unsigned char* sheetData = stbi_load(fullPath.c_str(), &sheetWidth, &sheetHeight, &nrChannels, 0);
+
+        if (!sheetData)
+        {
+            std::cerr << "ERROR::TEXTURE::TEXTURE_MAP::FILE_NOT_FOUND_OR_READ_FAILED: " << path << std::endl;
+            return textures;
+        }
+
+        if (tileWidth > sheetWidth || tileHeight > sheetHeight)
+        {
+            std::cerr << "ERROR::TEXTURE::TEXTURE_MAP::SIZE_EXCEEDS_IMAGE_DIMENSIONS: " << path << std::endl;
+            stbi_image_free(sheetData);
+            return textures;
+        }
+
+        if (limit == 0)
+        {
+            stbi_image_free(sheetData);
+            return textures;
+        }
+
+        const size_t rowBytes = static_cast<size_t>(tileWidth) * static_cast<size_t>(nrChannels);
+        std::vector<unsigned char> tileBuffer(rowBytes * static_cast<size_t>(tileHeight));
+
+        int createdCount = 0;
+
+        for (int y = 0; y + tileHeight <= sheetHeight; y += tileHeight + offsetY)
+        {
+            for (int x = 0; x + tileWidth <= sheetWidth; x += tileWidth + offsetX)
+            {
+                if (limit != -1 && createdCount >= limit)
+                    break;
+
+                for (int row = 0; row < tileHeight; ++row)
+                {
+                    const int srcY = y + (tileHeight - 1 - row);
+                    const size_t srcOffset =
+                        (static_cast<size_t>(srcY) * static_cast<size_t>(sheetWidth) + static_cast<size_t>(x)) *
+                        static_cast<size_t>(nrChannels);
+                    const size_t dstOffset = static_cast<size_t>(row) * rowBytes;
+
+                    std::memcpy(tileBuffer.data() + dstOffset, sheetData + srcOffset, rowBytes);
+                }
+
+                Texture* tex = CreateFromPixels(
+                    tileBuffer.data(),
+                    tileWidth,
+                    tileHeight,
+                    nrChannels,
+                    wrap,
+                    filter
+                );
+
+                if (tex && tex->IsValid())
+                {
+                    textures.push_back(tex);
+                }
+                else
+                {
+                    delete tex;
+                }
+
+                ++createdCount;
+            }
+
+            if (limit != -1 && createdCount >= limit)
+                break;
+        }
+
+        stbi_image_free(sheetData);
+        return textures;
     }
 
     // =========================================================================
