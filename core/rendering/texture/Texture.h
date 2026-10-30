@@ -80,7 +80,10 @@ public:
           filterMode(filter)
     {
         if (!data || width <= 0 || height <= 0)
+        {
+            std::cerr << "ERROR::TEXTURE::CREATION_FROM_PIXELS_FAILED" << std::endl;
             return;
+        }
 
         UploadToGPU(data, width, height, nrChannels);
     }
@@ -115,39 +118,8 @@ public:
     }
 
     // =========================================================================
-    // Factory Methods (return caller-owned Texture* / std::vector<Texture*>)
+    // Texture Sheet / Atlas Slicing (returns std::vector<Texture*>)
     // =========================================================================
-
-    static Texture* Create(
-        const std::string& path,
-        TextureWrapMode wrap = TextureWrapMode::REPEAT,
-        TextureFilterMode filter = TextureFilterMode::LINEAR
-    )
-    {
-        Texture* texture = new Texture(path, wrap, filter);
-        if (!texture->IsValid())
-        {
-            std::cerr << "ERROR::TEXTURE::CREATION_FAILED: " << path << std::endl;
-        }
-        return texture;
-    }
-
-    static Texture* CreateFromPixels(
-        const unsigned char* data,
-        int width,
-        int height,
-        int nrChannels,
-        TextureWrapMode wrap = TextureWrapMode::REPEAT,
-        TextureFilterMode filter = TextureFilterMode::LINEAR
-    )
-    {
-        Texture* texture = new Texture(data, width, height, nrChannels, wrap, filter);
-        if (!texture->IsValid())
-        {
-            std::cerr << "ERROR::TEXTURE::CREATION_FROM_PIXELS_FAILED" << std::endl;
-        }
-        return texture;
-    }
 
     // Slices a texture sheet / atlas into individual Texture* instances left-to-right, top-to-bottom.
     // - size: pixel dimensions (width, height) of each tile (must be positive).
@@ -195,7 +167,7 @@ public:
 
         // Load unflipped so tile 0 starts at top-left (x = 0, y = 0) and advances
         // left-to-right, top-to-bottom; each individual tile is flipped vertically
-        // before uploading to OpenGL so its UV orientation matches Texture::Create().
+        // before uploading to OpenGL so its UV orientation matches Texture(path).
         stbi_set_flip_vertically_on_load(false);
         int sheetWidth = 0, sheetHeight = 0, nrChannels = 0;
         unsigned char* sheetData = stbi_load(fullPath.c_str(), &sheetWidth, &sheetHeight, &nrChannels, 0);
@@ -242,7 +214,7 @@ public:
                     std::memcpy(tileBuffer.data() + dstOffset, sheetData + srcOffset, rowBytes);
                 }
 
-                Texture* tex = CreateFromPixels(
+                Texture* tex = new Texture(
                     tileBuffer.data(),
                     tileWidth,
                     tileHeight,
@@ -251,7 +223,7 @@ public:
                     filter
                 );
 
-                if (tex && tex->IsValid())
+                if (tex->IsValid())
                 {
                     textures.push_back(tex);
                 }

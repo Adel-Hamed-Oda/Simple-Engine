@@ -21,40 +21,29 @@ public:
 
     Shader() = default;
 
-    Shader(const std::string& vertexCode, const std::string& fragmentCode)
+    // Loads and compiles "<basePath>.vert" and "<basePath>.frag" from CONFIG::DIRECTORY::SHADERS.
+    explicit Shader(const std::string& basePath)
+        : Shader(basePath + ".vert", basePath + ".frag")
     {
-        if (vertexCode.empty() || fragmentCode.empty())
-            return;
+    }
 
-        GLuint vertex = CompileShader(vertexCode, GL_VERTEX_SHADER);
-        if (vertex == 0)
-            return;
+    // Loads and compiles explicit vertex and fragment file paths relative to CONFIG::DIRECTORY::SHADERS.
+    // Falls back to the built-in checker shader if reading or compilation fails.
+    Shader(const std::string& vertexPath, const std::string& fragmentPath)
+    {
+        const std::string vertexCode = ReadFile(vertexPath);
+        const std::string fragmentCode = ReadFile(fragmentPath);
 
-        GLuint fragment = CompileShader(fragmentCode, GL_FRAGMENT_SHADER);
-        if (fragment == 0)
+        ID = BuildProgram(vertexCode, fragmentCode);
+        if (!IsValid())
         {
-            glDeleteShader(vertex);
-            return;
+            std::cerr << "ERROR::SHADER::CREATION_FAILED: " << vertexPath << " / " << fragmentPath << std::endl;
+            ID = BuildProgram(FallBacks::VertexShaderCode, FallBacks::FragmentShaderCode);
+            if (!IsValid())
+            {
+                std::cerr << "ERROR::SHADER::FALLBACK_SHADER_CREATION_FAILED" << std::endl;
+            }
         }
-
-        GLuint programID = glCreateProgram();
-        glAttachShader(programID, vertex);
-        glAttachShader(programID, fragment);
-        glLinkProgram(programID);
-
-        GLint success = 0;
-        glGetProgramiv(programID, GL_LINK_STATUS, &success);
-        if (!success)
-        {
-            std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << GetProgramLog(programID) << std::endl;
-            glDeleteProgram(programID);
-            programID = 0;
-        }
-
-        glDeleteShader(vertex);
-        glDeleteShader(fragment);
-
-        ID = programID;
     }
 
     ~Shader()
@@ -83,53 +72,12 @@ public:
     }
 
     // =========================================================================
-    // Factory Methods (return caller-owned Shader*)
+    // Source Factory (required to disambiguate raw GLSL source strings from file paths)
     // =========================================================================
 
-    // Creates a shader from a base path (e.g. "shaders/Image" -> "shaders/Image.vert" & "shaders/Image.frag").
-    static Shader* Create(const std::string& basePath)
-    {
-        return CreateFromFiles(basePath + ".vert", basePath + ".frag");
-    }
-
-    // Creates a shader from explicit vertex and fragment file paths relative to CONFIG::DIRECTORY::SHADERS.
-    static Shader* CreateFromFiles(const std::string& vertexPath, const std::string& fragmentPath)
-    {
-        const std::string vertexCode = ReadFile(vertexPath);
-        const std::string fragmentCode = ReadFile(fragmentPath);
-
-        Shader* shader = new Shader(vertexCode, fragmentCode);
-        if (!shader->IsValid())
-        {
-            std::cerr << "ERROR::SHADER::CREATION_FAILED: " << vertexPath << " / " << fragmentPath << std::endl;
-            delete shader;
-            return CreateFallback();
-        }
-
-        return shader;
-    }
-
-    // Creates a shader directly from vertex and fragment GLSL source strings.
     static Shader* CreateFromSource(const std::string& vertexCode, const std::string& fragmentCode)
     {
-        Shader* shader = new Shader(vertexCode, fragmentCode);
-        if (!shader->IsValid())
-        {
-            std::cerr << "ERROR::SHADER::CREATION_FROM_SOURCE_FAILED" << std::endl;
-            delete shader;
-            return CreateFallback();
-        }
-
-        return shader;
-    }
-
-    // Compiles and returns the fallback checker shader.
-    static Shader* CreateFallback()
-    {
-        Shader* fallback = new Shader(FallBacks::VertexShaderCode, FallBacks::FragmentShaderCode);
-        if (!fallback->IsValid())
-            std::cerr << "ERROR::SHADER::FALLBACK_SHADER_CREATION_FAILED" << std::endl;
-        return fallback;
+        return new Shader(FromSourceTag{}, vertexCode, fragmentCode);
     }
 
     // =========================================================================
@@ -197,6 +145,58 @@ public:
     }
 
 private:
+    struct FromSourceTag {};
+
+    Shader(FromSourceTag, const std::string& vertexCode, const std::string& fragmentCode)
+    {
+        ID = BuildProgram(vertexCode, fragmentCode);
+        if (!IsValid())
+        {
+            std::cerr << "ERROR::SHADER::CREATION_FROM_SOURCE_FAILED" << std::endl;
+            ID = BuildProgram(FallBacks::VertexShaderCode, FallBacks::FragmentShaderCode);
+            if (!IsValid())
+            {
+                std::cerr << "ERROR::SHADER::FALLBACK_SHADER_CREATION_FAILED" << std::endl;
+            }
+        }
+    }
+
+    static GLuint BuildProgram(const std::string& vertexCode, const std::string& fragmentCode)
+    {
+        if (vertexCode.empty() || fragmentCode.empty())
+            return 0;
+
+        GLuint vertex = CompileShader(vertexCode, GL_VERTEX_SHADER);
+        if (vertex == 0)
+            return 0;
+
+        GLuint fragment = CompileShader(fragmentCode, GL_FRAGMENT_SHADER);
+        if (fragment == 0)
+        {
+            glDeleteShader(vertex);
+            return 0;
+        }
+
+        GLuint programID = glCreateProgram();
+        glAttachShader(programID, vertex);
+        glAttachShader(programID, fragment);
+        glLinkProgram(programID);
+
+        GLint success = 0;
+        glGetProgramiv(programID, GL_LINK_STATUS, &success);
+        if (!success)
+        {
+            std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << GetProgramLog(programID) << std::endl;
+            glDeleteProgram(programID);
+            programID = 0;
+        }
+
+        glDeleteShader(vertex);
+        glDeleteShader(fragment);
+
+        return programID;
+    }
+
     GLint GetUniformLocation(const std::string& uniformName) const
     {
         if (ID == 0)

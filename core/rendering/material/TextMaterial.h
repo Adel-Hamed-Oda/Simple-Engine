@@ -17,11 +17,6 @@ public:
 
 	~TextMaterial() override = default;
 
-	static TextMaterial* Create(Shader* shader)
-	{
-		return new TextMaterial(shader);
-	}
-
 	void ApplyMaterial() override
 	{
 		if (!shader || !shader->IsValid()) return;

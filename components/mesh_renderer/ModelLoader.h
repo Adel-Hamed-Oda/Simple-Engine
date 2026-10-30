@@ -20,14 +20,6 @@
 class ModelLoader
 {
 public:
-    static Mesh* Create(
-        const std::string& path,
-        glm::vec4 defaultColor = glm::vec4(1.0f)
-    )
-    {
-        return LoadMesh(path, defaultColor);
-    }
-
     static Mesh* LoadMesh(
         const std::string& path,
         glm::vec4 defaultColor = glm::vec4(1.0f)
@@ -110,8 +102,8 @@ private:
 
                 if (existing == loadedTextures.end())
                 {
-                    Texture* tex = Texture::Create(texRelativePath);
-                    if (tex && tex->IsValid())
+                    Texture* tex = new Texture(texRelativePath);
+                    if (tex->IsValid())
                     {
                         loadedTextures.emplace_back(texRelativePath, tex);
                         outMesh.textures.push_back(tex);

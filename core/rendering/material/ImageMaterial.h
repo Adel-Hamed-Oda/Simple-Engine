@@ -20,11 +20,6 @@ public:
 
 	~ImageMaterial() override = default;
 
-	static ImageMaterial* Create(Shader* shader, Texture* texture = nullptr)
-	{
-		return new ImageMaterial(shader, texture);
-	}
-
 	Texture* GetTexture() const { return texture; }
 	bool HasTexture() const { return texture != nullptr && texture->IsValid(); }
 

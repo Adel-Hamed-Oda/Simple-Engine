@@ -22,11 +22,6 @@ public:
 
 	~DefaultMaterial() override = default;
 
-	static DefaultMaterial* Create(Shader* shader, Texture* texture = nullptr)
-	{
-		return new DefaultMaterial(shader, texture);
-	}
-
 	Texture* GetTexture() const { return texture; }
 	bool HasTexture() const { return texture != nullptr && texture->IsValid(); }
 

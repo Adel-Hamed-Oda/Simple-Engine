@@ -6,6 +6,7 @@
 #include <cmath>
 #include <functional>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 class Tween
@@ -15,7 +16,7 @@ public:
 
     // Works for int, short, float, double, and glm vectors as far as I can tell.
     template <typename T>
-    static Tween* Create(
+    Tween(
         T* value,
         const T& start,
         const T& end,
@@ -23,19 +24,23 @@ public:
         std::function<float(float)> easingFunction = nullptr,
         std::function<void()> onComplete = nullptr
     )
+        : duration(duration),
+          easingFunction(std::move(easingFunction)),
+          onComplete(std::move(onComplete)),
+          apply([value, start, end](float t)
+          {
+              *value = Lerp<T>(start, end, t);
+          })
     {
-        Tween* tween = new Tween();
-        tween->duration = duration;
-        tween->easingFunction = std::move(easingFunction);
-        tween->onComplete = std::move(onComplete);
-        tween->apply = [value, start, end](float t)
-        {
-            *value = Lerp<T>(start, end, t);
-        };
+        activeTweens.push_back(this);
+    }
 
-        activeTweens.push_back(tween);
-
-        return tween;
+    ~Tween()
+    {
+        activeTweens.erase(
+            std::remove(activeTweens.begin(), activeTweens.end(), this),
+            activeTweens.end()
+        );
     }
 
     static void UpdateAll()
@@ -44,12 +49,18 @@ public:
         {
             Tween* tween = activeTweens[i];
 
-            tween->Update();
+            tween->elapsedTime += Time::deltaTime;
+            tween->apply(tween->GetT());
 
             if (tween->Finished())
             {
-                activeTweens.erase(activeTweens.begin() + i);
+                auto callback = tween->onComplete;
                 delete tween;
+
+                if (callback)
+                {
+                    callback();
+                }
             }
             else
             {
@@ -76,20 +87,6 @@ public:
     }
 
 private:
-    Tween() = default;
-
-    void Update()
-    {
-        elapsedTime += Time::deltaTime;
-
-        apply(GetT());
-
-        if (Finished() && onComplete)
-        {
-            onComplete();
-        }
-    }
-
     template <typename T>
     static T Lerp(const T& a, const T& b, float t)
     {
