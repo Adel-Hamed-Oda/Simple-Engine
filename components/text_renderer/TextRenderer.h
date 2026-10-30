@@ -176,14 +176,15 @@ public:
 
             // World space is y-up. The bitmap's  first row is the TOP of the glyph,
             // so the top edge uses v = 0. Counter-clockwise when viewed from +Z.
-            const float vertices[6][4] = {
-                { x0, y0, 0.0f, 1.0f },  // bottom-left
-                { x1, y0, 1.0f, 1.0f },  // bottom-right
-                { x1, y1, 1.0f, 0.0f },  // top-right
+            // Layout per vertex: { position.x, position.y, position.z, uv.x, uv.y }
+            const float vertices[6][5] = {
+                { x0, y0, 0.0f, 0.0f, 1.0f },  // bottom-left
+                { x1, y0, 0.0f, 1.0f, 1.0f },  // bottom-right
+                { x1, y1, 0.0f, 1.0f, 0.0f },  // top-right
 
-                { x0, y0, 0.0f, 1.0f },  // bottom-left
-                { x1, y1, 1.0f, 0.0f },  // top-right
-                { x0, y1, 0.0f, 0.0f }   // top-left
+                { x0, y0, 0.0f, 0.0f, 1.0f },  // bottom-left
+                { x1, y1, 0.0f, 1.0f, 0.0f },  // top-right
+                { x0, y1, 0.0f, 0.0f, 0.0f }   // top-left
             };
 
             glBindTexture(GL_TEXTURE_2D, g.textureID);
@@ -275,14 +276,27 @@ private:
         glBindTexture(GL_TEXTURE_2D, 0);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
-        const float vertices[6][4] = {};
+        // Vertex attribute locations match the regular mesh layout so text shaders can be
+        // written like any other shader:
+        //   layout (location = 0) in vec3 aPos;
+        //   layout (location = 3) in vec2 aUV;
+        constexpr GLuint POSITION_LOCATION = 0;
+        constexpr GLuint UV_LOCATION = 3;
+        constexpr GLsizei STRIDE = 5 * sizeof(float);
+
+        const float vertices[6][5] = {};
         glGenVertexArrays(1, &VAO);
         glGenBuffers(1, &VBO);
         glBindVertexArray(VAO);
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
         glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+
+        glEnableVertexAttribArray(POSITION_LOCATION);
+        glVertexAttribPointer(POSITION_LOCATION, 3, GL_FLOAT, GL_FALSE, STRIDE, nullptr);
+
+        glEnableVertexAttribArray(UV_LOCATION);
+        glVertexAttribPointer(UV_LOCATION, 2, GL_FLOAT, GL_FALSE, STRIDE, reinterpret_cast<void*>(3 * sizeof(float)));
+
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
     }
