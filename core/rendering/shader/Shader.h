@@ -4,7 +4,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "../../../Config.h"
 #include "../../statics/FallBacks.h"
 
 #include <fstream>
@@ -21,13 +20,13 @@ public:
 
     Shader() = default;
 
-    // Loads and compiles "<basePath>.vert" and "<basePath>.frag" from CONFIG::DIRECTORY::SHADERS.
+    // Loads and compiles "<basePath>.vert" and "<basePath>.frag" relative to the executable directory.
     explicit Shader(const std::string& basePath)
         : Shader(basePath + ".vert", basePath + ".frag")
     {
     }
 
-    // Loads and compiles explicit vertex and fragment file paths relative to CONFIG::DIRECTORY::SHADERS.
+    // Loads and compiles explicit vertex and fragment file paths relative to the executable directory.
     // Falls back to the built-in checker shader if reading or compilation fails.
     Shader(const std::string& vertexPath, const std::string& fragmentPath)
     {
@@ -207,12 +206,10 @@ private:
 
     static std::string ReadFile(const std::string& filepath)
     {
-        const std::string fullPath = CONFIG::DIRECTORY::SHADERS + filepath;
-
-        std::ifstream file(fullPath, std::ios::in | std::ios::binary);
+        std::ifstream file(filepath, std::ios::in | std::ios::binary);
         if (!file.is_open())
         {
-            std::cerr << "ERROR::SHADER::FILE_NOT_FOUND_OR_READ_FAILED: " << fullPath << std::endl;
+            std::cerr << "ERROR::SHADER::FILE_NOT_FOUND_OR_READ_FAILED: " << filepath << std::endl;
             return "";
         }
 

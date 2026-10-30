@@ -2,8 +2,7 @@
 
 #include <miniaudio.h>
 
-#include "../../Config.h"
-
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -20,13 +19,13 @@ public:
         ma_engine_uninit(&engine);
     }
 
-    AudioSource(const std::string& path) : audioFilePath(CONFIG::DIRECTORY::AUDIO + path) 
+    AudioSource(const std::string& path) : audioFilePath(path)
     {
         audioSources.push_back(this);
     }
-    ~AudioSource() 
-    { 
-        audioSources.erase(std::remove(audioSources.begin(), audioSources.end(), this), audioSources.end()); 
+    ~AudioSource()
+    {
+        audioSources.erase(std::remove(audioSources.begin(), audioSources.end(), this), audioSources.end());
     }
 
     void Play()

@@ -56,13 +56,4 @@ namespace CONFIG
         constexpr int WIDTH = 1000;
         constexpr int HEIGHT = 1000;
     }
-
-    namespace DIRECTORY
-    {
-        constexpr const char* ASSETS = "assets/";
-        constexpr const char* SHADERS = "assets/";
-        constexpr const char* TEXTURES = "assets/";
-        constexpr const char* AUDIO = "assets/";
-        constexpr const char* MODELS = "assets/";
-    }
 }

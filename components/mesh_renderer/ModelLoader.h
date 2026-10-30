@@ -7,7 +7,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 
-#include "../../Config.h"
 #include "../../core/rendering/texture/Texture.h"
 #include "Mesh.h"
 
@@ -253,11 +252,9 @@ private:
         Mesh& outMesh
     )
     {
-        const std::string fullPath = CONFIG::DIRECTORY::MODELS + path;
-
         Assimp::Importer importer;
         const aiScene* scene = importer.ReadFile(
-            fullPath,
+            path,
             aiProcess_Triangulate |
             aiProcess_GenSmoothNormals |
             aiProcess_JoinIdenticalVertices
@@ -266,7 +263,7 @@ private:
         if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode)
         {
             std::cerr << "ERROR::MODEL_LOADER::ASSIMP_LOAD_FAILED: "
-                      << fullPath << " (" << importer.GetErrorString() << ")" << std::endl;
+                      << path << " (" << importer.GetErrorString() << ")" << std::endl;
             return false;
         }
 
@@ -276,7 +273,7 @@ private:
 
         if (outMesh.vertices.empty() || outMesh.triangles.empty())
         {
-            std::cerr << "ERROR::MODEL_LOADER::EMPTY_MESH: " << fullPath << std::endl;
+            std::cerr << "ERROR::MODEL_LOADER::EMPTY_MESH: " << path << std::endl;
             return false;
         }
 

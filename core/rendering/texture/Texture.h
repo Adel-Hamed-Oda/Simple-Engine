@@ -5,8 +5,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <stb_image.h>
 
-#include "../../../Config.h"
-
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -49,11 +47,9 @@ public:
         : wrapMode(wrap),
           filterMode(filter)
     {
-        const std::string fullPath = CONFIG::DIRECTORY::TEXTURES + texturePath;
-
         stbi_set_flip_vertically_on_load(true);
         int width = 0, height = 0, nrChannels = 0;
-        unsigned char* data = stbi_load(fullPath.c_str(), &width, &height, &nrChannels, 0);
+        unsigned char* data = stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
 
         if (!data)
         {
@@ -163,14 +159,12 @@ public:
         const int offsetX = static_cast<int>(offset.x);
         const int offsetY = static_cast<int>(offset.y);
 
-        const std::string fullPath = CONFIG::DIRECTORY::TEXTURES + path;
-
         // Load unflipped so tile 0 starts at top-left (x = 0, y = 0) and advances
         // left-to-right, top-to-bottom; each individual tile is flipped vertically
         // before uploading to OpenGL so its UV orientation matches Texture(path).
         stbi_set_flip_vertically_on_load(false);
         int sheetWidth = 0, sheetHeight = 0, nrChannels = 0;
-        unsigned char* sheetData = stbi_load(fullPath.c_str(), &sheetWidth, &sheetHeight, &nrChannels, 0);
+        unsigned char* sheetData = stbi_load(path.c_str(), &sheetWidth, &sheetHeight, &nrChannels, 0);
 
         if (!sheetData)
         {
