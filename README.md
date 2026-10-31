@@ -1,36 +1,36 @@
 # Simple Engine User Guide
 
 This document explains how to use Simple Engine from an application that includes
-the engine as a submodule. It focuses on the runtime API and available features.
-Project-specific CMake integration is intentionally not covered here.
+the engine as a submodule. It covers the runtime API, architecture conventions,
+and CMake integration for consuming projects.
 
 ## Overview
 
-Simple Engine is a C++20, OpenGL-based engine with:
+Simple Engine is a C++20, OpenGL 3.3 Core profile engine featuring:
 
-- GLFW window and input handling
-- GLAD OpenGL loading
-- Scene and game-object management
-- Component-based behaviours
-- Transform hierarchies
-- Mesh rendering with materials, shaders, textures, and lights
-- Perspective and orthographic cameras
-- Basic rigidbody physics and axis-aligned box colliders
-- Audio playback through miniaudio
-- Frame timing, timers, and value tweens
-- Debug logging
+- **Window & Context:** GLFW window management and GLAD OpenGL 3.3 Core loading
+- **Lifecycle:** Multi-phase engine lifecycle (`Engine::setup()`, `Engine::run()`, `Engine::terminate()`)
+- **Scene & Entity System:** Scene management with `GameObject` hierarchies and extensible `Behaviour` components
+- **3D Rendering:** `MeshRenderer` with customizable shaders, materials (`DefaultMaterial`), textures, and multi-light support (`LightSource`)
+- **2D Screen UI:** Normalized screen-space `ImageRenderer` (`ImageMaterial`) and interactive `Button` components
+- **Text Rendering:** FreeType-powered text rendering in both 3D world space (`WorldTextRenderer`) and 2D screen space (`ScreenTextRenderer`) via `TextMaterial`
+- **Model & Texture Loading:** Assimp-based 3D model importing (`ModelLoader`), STB image loading, and sprite sheet / atlas slicing (`Texture::CreateTextureMap`)
+- **Direct Pointer Architecture:** Simple, predictable raw pointer ownership (`*`) without hidden string registries or lookup maps
+- **Physics:** Basic `Rigidbody` numerical integration and axis-aligned `BoxCollider` detection and resolution
+- **Audio:** Multi-channel audio playback powered by miniaudio (`AudioSource`)
+- **Animation & Timing:** Frame timing (`Time`), heap-managed timers (`Timer`), and property tweens (`Tween`)
+- **Diagnostics:** Built-in console logging (`Debug::Log`)
 
-The public entry point is `Engine::run()`. It initializes the window and
-graphics context, initializes engine systems, runs the game loop, and performs
-shutdown when the window closes.
+---
 
-## Setup and Minimal application
+## Setup and Minimal Application
 
-First, create a folder with the name of the game you are creating [this section assumes it's called "TestOpenGLGame"]
+### 1. Project Directory & CMakeLists.txt
 
-After that, create a new "CMakeLists.txt" file inside the folder and put the following code into it:
+Create a folder for your project (e.g. `TestOpenGLGame`). Inside the root folder, create a `CMakeLists.txt` file:
 
-```c
+```cmake
+# Name shouldn't contain spaces
 set(APPLICATION_NAME "TestOpenGLGame")
 
 cmake_minimum_required(VERSION 3.10)
@@ -49,484 +49,584 @@ add_executable(${APPLICATION_NAME}
 
 target_link_libraries(${APPLICATION_NAME} PRIVATE Engine)
 
+# Delete outdated assets and copy the fresh assets folder next to the executable on every build
 if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
     add_custom_command(
         TARGET ${APPLICATION_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -rf
+                "$<TARGET_FILE_DIR:${APPLICATION_NAME}>/assets"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${CMAKE_SOURCE_DIR}/assets"
                 "$<TARGET_FILE_DIR:${APPLICATION_NAME}>/assets"
-        COMMENT "Copying assets folder to output directory..."
+        COMMENT "Removing old assets and copying fresh assets folder to output directory..."
     )
 endif()
 ```
 
-After that, assuming you have installed git successfully, type `git submodule add "https://github.com/Adel-Hamed-Oda/Simple-Engine.git" engine` inside the terminal on the same level as the CMakeLists file.
+### 2. Adding the Submodule
 
-After the module is downloaded successfully, to be able to start the project you need to have an src folder and an Application.cpp file inside the src folder.
+In your project root directory, add the engine as a git submodule:
 
-Include `Engine.h`, define at least one scene, register it, and start the engine:
+```bash
+git submodule add "https://github.com/Adel-Hamed-Oda/Simple-Engine.git" engine
+```
+
+### 3. Application Entry Point
+
+Create `src/Application.cpp`. The engine requires calling `Engine::setup()` first to initialize GLFW, GLAD, the primary window, and engine subsystems, followed by registering scenes, and finally invoking `Engine::run()`:
 
 ```cpp
-#include <memory>
-
-#include "Engine.h"
+#include <Engine.h>
 
 class MainScene : public Scene
 {
 public:
     void Setup() override
     {
-        // Create the objects used by this scene here.
+        // Construct game objects, materials, and components here
+        auto* cameraObj = Instantiate(new GameObject("MainCamera", glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f), glm::vec3(1.0f)));
+        auto* camera = cameraObj->AddComponent<Camera>(ProjectionType::Perspective);
+        camera->fov = 60.0f;
     }
 };
 
 int main()
 {
+    // 1. Initialize GLFW, window, GLAD OpenGL context, audio, and subsystems
+    if (!Engine::setup())
+    {
+        return -1;
+    }
+
+    // 2. Register scenes and select the startup scene
     SceneManager::RegisterScene<MainScene>("main");
+    SceneManager::LoadScene("main");
+
+    // 3. Start the main game loop
     return Engine::run();
 }
 ```
 
-`Setup()` is called after the OpenGL context and engine systems have been
-initialized. This is the appropriate place to create OpenGL-backed resources
-such as shaders, textures, and mesh renderers.
+To shut down the engine gracefully from any scene or button callback:
+```cpp
+Engine::terminate();
+```
 
-By default, `CONFIG::ENGINE::LOAD_FIRST_SCENE` is `true`, so the engine loads
-the first registered scene when startup completes. Register one startup scene
-when relying on this behavior. To load scenes explicitly, use
-`SceneManager::LoadScene("scene-name")` after scenes have been registered and
-the engine has initialized.
+---
 
-## Scenes and game objects
+## Asset Path Convention
 
-`Scene` owns its game objects. Add an object with `Instantiate()`:
+Asset loading does not prepend hardcoded directory prefixes. All asset paths (shaders, textures, models, audio, fonts) are resolved directly relative to the executable's working directory.
+
+When using the standard CMake configuration, assets are copied into an `assets/` folder next to the executable. Pass relative paths starting with `"assets/..."`:
+
+```cpp
+Shader* shader = new Shader("assets/shaders/Image.vert", "assets/shaders/Image.frag");
+Texture* texture = new Texture("assets/textures/player.png");
+Mesh* mesh = ModelLoader::LoadMesh("assets/models/character.obj");
+AudioSource sound("assets/audio/click.wav");
+```
+
+---
+
+## Scenes and GameObjects
+
+### Scene Lifecycle
+
+`Scene` manages the lifetime of its active `GameObject` instances:
+
+1. `Setup()`: Invoked when the scene is loaded. Construct scene-specific resources (shaders, textures, materials) and instantiate game objects here.
+2. `Start()`: Called once on all components before the first frame update.
+3. `Update()`: Called every frame; dispatches updates to all active components and behaviours.
+4. `Unload()`: Called when switching scenes or shutting down. Clears game objects; free scene-owned resources here.
+
+### Instantiating Objects
+
+Use `Instantiate()` to transfer ownership of a `GameObject` pointer to the active scene:
 
 ```cpp
 auto* player = Instantiate(new GameObject(
     "Player",
-    glm::vec3(0.0f, 0.0f, 0.0f),
-    glm::vec3(0.0f),
-    glm::vec3(1.0f)
+    glm::vec3(0.0f, 0.0f, 0.0f),  // position
+    glm::vec3(0.0f, 0.0f, 0.0f),  // rotation (pitch, yaw, roll in degrees)
+    glm::vec3(1.0f, 1.0f, 1.0f)   // scale
 ));
 ```
 
-`Instantiate()` takes ownership of the pointer. Do not delete an object after
-passing it to the scene.
-
-A scene has the following lifecycle:
-
-1. `Setup()` creates and configures objects and resources.
-2. `Start()` is called once after setup and forwards to every behaviour.
-3. `Update()` is called every frame and forwards to every behaviour.
-4. `Unload()` is called when the scene is replaced or the engine shuts down.
-
-Register and load scenes by name:
+You can also construct game objects with components directly using variadic arguments:
 
 ```cpp
-SceneManager::RegisterScene<LevelScene>("level");
-SceneManager::RegisterScene<MenuScene>("menu");
+auto* buttonObj = Instantiate(new GameObject(
+    "PlayButton",
+    glm::vec3(0.0f, 0.0f, 0.0f),
+    glm::vec3(0.0f),
+    glm::vec3(0.4f, 0.2f, 1.0f),
+    std::make_unique<ImageRenderer>(buttonMaterial),
+    std::make_unique<Button>([]() {
+        Debug::Log("Play clicked!");
+    })
+));
+```
 
-SceneManager::LoadScene("level");
-SceneManager::HasScene("menu");
-SceneManager::GetCurrentScene();
+### Scene Management
+
+```cpp
+SceneManager::RegisterScene<MainMenuScene>("mainmenu");
+SceneManager::RegisterScene<GameplayScene>("gameplay");
+
+SceneManager::LoadScene("gameplay");
+SceneManager::HasScene("mainmenu");
+Scene* current = SceneManager::GetCurrentScene();
 SceneManager::UnloadScene();
 ```
 
-## Components and behaviours
+---
 
-Every `GameObject` has a `Transform`. Additional components derive from
-`Component`. Use `AddComponent<T>()` and `GetComponent<T>()`:
+## Components and Behaviours
+
+Every `GameObject` possesses a `Transform`. Additional components derive from `Component`.
+
+### Adding and Retrieving Components
 
 ```cpp
-auto* cameraObject = Instantiate(new GameObject("Camera"));
-auto* camera = cameraObject->AddComponent<Camera>();
+auto* cameraObj = Instantiate(new GameObject("Camera"));
+Camera* camera = cameraObj->AddComponent<Camera>(ProjectionType::Perspective);
 
-cameraObject->transform->position = glm::vec3(0.0f, 0.0f, 5.0f);
-cameraObject->transform->rotation = glm::vec3(0.0f, 180.0f, 0.0f);
-
-Camera* sameCamera = cameraObject->GetComponent<Camera>();
+Camera* sameCamera = cameraObj->GetComponent<Camera>();
 ```
 
-To create game-specific logic, derive from `Behaviour`:
+### Custom Behaviours
+
+Derive from `Behaviour` to implement gameplay logic:
 
 ```cpp
 class PlayerController : public Behaviour
 {
 public:
+    float speed = 5.0f;
+
     void Start() override
     {
-        Debug::Log("Player started");
+        Debug::Log("Player initialized");
     }
 
     void Update() override
     {
         if (Input::GetKey(GLFW_KEY_W))
-            transform->position += transform->Forward() * 3.0f * Time::deltaTime;
+            transform->position += transform->Forward() * speed * Time::deltaTime;
 
         if (Input::GetKeyDown(GLFW_KEY_SPACE))
-            Debug::Log("Jump pressed");
+            Debug::Log("Jump triggered");
     }
 };
 ```
 
-The engine assigns both `owner` and `transform` when the component is added.
-Behaviour updates run during the scene update phase.
+---
 
 ## Transforms
 
-`Transform` exposes:
+The `Transform` component manages spatial position, orientation, and hierarchy:
 
 ```cpp
-glm::vec3 position;
-glm::vec3 rotation; // degrees, applied in Y, then X, then Z order
-glm::vec3 scale;
-Transform* parent;
+glm::vec3 position;  // World or local position
+glm::vec3 rotation;  // Euler angles in degrees (applied Y -> X -> Z)
+glm::vec3 scale;     // Scale factors
+Transform* parent;   // Optional parent transform
 ```
 
-Useful helpers include:
-
+Directional vectors and matrix helpers:
 ```cpp
-transform->Forward();
-transform->Right();
-transform->Up();
-transform->GetRotationMatrix();
-transform->GetModelMatrix();
+glm::vec3 fwd   = transform->Forward();  // Local -Z direction in world space
+glm::vec3 right = transform->Right();    // Local +X direction in world space
+glm::vec3 up    = transform->Up();       // Local +Y direction in world space
+
+glm::mat4 model = transform->GetModelMatrix();
 ```
 
-The forward direction is local `-Z`. Parent transforms affect the rotation and
-model matrix of their children.
+---
 
-## Rendering
+## Rendering Pipeline
+
+The rendering system separates rendering into three organized passes:
+
+1. **World-Space Meshes:** Opaque, lit 3D geometry rendered using `MeshRenderer` with depth testing.
+2. **World-Space Text:** 3D font text rendered via `WorldTextRenderer`, depth-tested against the 3D scene and sorted by `zOrder`.
+3. **Screen-Space UI:** 2D UI elements (`ImageRenderer` and `ScreenTextRenderer`) rendered with orthographic projection, disabled depth testing, alpha blending, and sorted together by `zOrder`.
 
 ### Cameras
 
-Add a `Camera` component to an object. The first camera constructed becomes
-`Camera::mainCamera` and is used for rendering:
+Add a `Camera` component to an object. The first constructed camera automatically becomes `Camera::mainCamera`:
 
 ```cpp
-auto* cameraObject = Instantiate(new GameObject(
-    "Main Camera",
-    glm::vec3(0.0f, 1.0f, 5.0f),
-    glm::vec3(-10.0f, 0.0f, 0.0f),
-    glm::vec3(1.0f)
-));
-
-auto* camera = cameraObject->AddComponent(
-    std::make_unique<Camera>(ProjectionType::Perspective)
-);
+auto* cameraObj = Instantiate(new GameObject("MainCamera", glm::vec3(0.0f, 1.0f, 5.0f), glm::vec3(-10.0f, 0.0f, 0.0f), glm::vec3(1.0f)));
+auto* camera = cameraObj->AddComponent<Camera>(ProjectionType::Perspective);
 camera->fov = 60.0f;
 camera->nearPlane = 0.1f;
 camera->farPlane = 500.0f;
 ```
 
-For a 2D-style camera, use `ProjectionType::Orthographic` and configure
-`orthoScale`.
-
-### Meshes and renderers
-
-`Mesh` provides built-in geometry generators:
-
+For orthographic cameras (e.g. 2D gameplay):
 ```cpp
-Mesh cube = Mesh::CreateCube(glm::vec4(0.2f, 0.7f, 1.0f, 1.0f));
-Mesh sphere = Mesh::CreateSphere(0.5f, 20, 20);
+auto* orthoCamera = cameraObj->AddComponent<Camera>(ProjectionType::Orthographic);
+orthoCamera->orthoScale = 5.0f;
 ```
-
-Custom meshes can fill `vertices`, `triangles`, `normals`, `colors`, and
-`uvs`. `triangles` contains unsigned integer indices. Optional vertex
-attributes are used only when they have the same number of entries as
-`vertices`.
-
-Attach a mesh renderer with a shared material:
-
-```cpp
-auto* cubeObject = Instantiate(new GameObject("Cube"));
-auto material = std::make_shared<DefaultMaterial>("default");
-
-cubeObject->AddComponent(
-    std::make_unique<MeshRenderer>(Mesh::CreateCube(), material)
-);
-```
-
-The renderer is drawn automatically for every object in the active scene that
-has both a `MeshRenderer` and a valid material.
 
 ### Shaders
 
-Create shaders after the engine has initialized the graphics context:
+Construct shaders directly via `new Shader(...)`. Shaders are compiled immediately upon construction:
 
 ```cpp
-Shader* shader = Shader::Create("shaders/default");
+// 1. Explicit vertex and fragment file paths
+Shader* shader = new Shader("assets/shaders/custom.vert", "assets/shaders/custom.frag");
+
+// 2. Base path shorthand (loads "<basePath>.vert" and "<basePath>.frag")
+Shader* defaultShader = new Shader("assets/shaders/default");
+
+// 3. Raw source strings
+Shader* sourceShader = Shader::CreateFromSource(vertexGLSL, fragmentGLSL);
 ```
 
-This reads:
+#### Vertex Attribute Convention
 
-```text
-assets/shaders/default.vert
-assets/shaders/default.frag
+All shaders in Simple Engine share the standard vertex attribute layout:
+
+| Location | Attribute | Type | Used By |
+| :--- | :--- | :--- | :--- |
+| `0` | `aPos` | `vec3` | Meshes, Quads, Text |
+| `1` | `aNormal` | `vec3` | Meshes, Quads |
+| `2` | `aColor` | `vec4` | Meshes, Quads |
+| `3` | `aUV` | `vec2` | Meshes, Quads, Text |
+
+Because text shaders also use `location = 0` (`vec3 aPos`) and `location = 3` (`vec2 aUV`), you can write text shaders in the exact same format as standard shaders:
+
+```glsl
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 3) in vec2 aUV;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
+out vec2 TexCoords;
+
+void main()
+{
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    TexCoords = aUV;
+}
 ```
 
-`Shader::Create(path, name)` stores a shader under a custom lookup name.
-`Shader::CreateFromFiles(vertexPath, fragmentPath, name)` supports separate
-paths. Shader file paths are relative to `CONFIG::DIRECTORY::SHADERS`, which
-defaults to `assets/`.
+### Textures & Texture Atlases
 
-Use a shader by name when constructing a material:
+Construct textures with `new Texture(...)`:
 
 ```cpp
-auto material = std::make_shared<DefaultMaterial>("default");
+Texture* texture = new Texture(
+    "assets/textures/wood.png",
+    TextureWrapMode::REPEAT,
+    TextureFilterMode::LINEAR
+);
 ```
 
-The built-in shader and material convention expects the following vertex
-attributes:
+#### Texture Atlases / Sprite Sheets
 
-| Location | Attribute         |
-| -------- | ----------------- |
-| 0        | Position (`vec3`) |
-| 1        | Normal (`vec3`)   |
-| 2        | Color (`vec4`)    |
-| 3        | UV (`vec2`)       |
-
-`Shader::Get()` returns the named shader, or a fallback shader when the name is
-missing. Creation and lookup failures are logged to `stderr`.
-
-### Materials and textures
-
-`DefaultMaterial` supports:
+Slice a sprite sheet into individual `Texture*` tiles using `Texture::CreateTextureMap`:
 
 ```cpp
-material->baseColor;
-material->ambient;
-material->specularStrength;
-material->shininess;
-material->textureName;
+// Slices left-to-right, top-to-bottom
+std::vector<Texture*> frames = Texture::CreateTextureMap(
+    "assets/sprites/character_sheet.png",
+    glm::vec2(64.0f, 64.0f),  // Tile size in pixels (width, height)
+    glm::vec2(0.0f, 0.0f),    // Padding/offset between tiles
+    -1                        // Limit (-1 for all tiles, or max count)
+);
 ```
 
-Load a texture and reference it by its registry name:
+### Materials
 
+Materials are lightweight data containers holding shader pointers and material uniforms. Simple Engine provides three built-in material types:
+
+#### 1. DefaultMaterial (3D Lit Geometry)
 ```cpp
-Texture* texture = Texture::Create("textures/crate.png", "crate");
-if (texture)
-    material->textureName = "crate";
+auto* material = new DefaultMaterial(meshShader);
+material->texture = texture;
+material->baseColor = glm::vec3(1.0f);
+material->ambient = glm::vec3(0.1f);
+material->specularStrength = 0.5f;
+material->shininess = 32.0f;
 ```
 
-The file above resolves to `assets/textures/crate.png`. Texture loading flips
-images vertically while loading and restores the image-loader setting after
-the operation.
+#### 2. ImageMaterial (2D Screen UI Quads)
+```cpp
+auto* imageMaterial = new ImageMaterial(uiShader);
+imageMaterial->texture = iconTexture;
+imageMaterial->color = glm::vec4(1.0f, 1.0f, 1.0f, 0.9f);
+imageMaterial->grayscale = false; // Set to true to display in black-and-white
+```
 
-Materials are shared with `std::shared_ptr`, so multiple mesh renderers can
-use the same material.
+#### 3. TextMaterial (Font Rendering)
+```cpp
+auto* textMaterial = new TextMaterial(textShader);
+textMaterial->color = glm::vec3(1.0f, 0.9f, 0.2f);
+textMaterial->doubleSided = true;
+```
 
-### Lights
+### 3D Meshes & MeshRenderer
 
-Add `LightSource` to an object. Every active light is sent to the material's
-shader:
+Create built-in primitives or load external 3D models with `ModelLoader`:
 
 ```cpp
-auto* lightObject = Instantiate(new GameObject(
-    "Key Light",
-    glm::vec3(2.0f, 4.0f, 2.0f),
+// Built-in primitives (heap-allocated Mesh*)
+Mesh* cubeMesh   = Mesh::CreateCube();
+Mesh* sphereMesh = Mesh::CreateSphere(0.5f, 20, 20);
+Mesh* quadMesh   = Mesh::CreateQuad();
+
+// External 3D models via Assimp (.obj, .fbx, .gltf, etc.)
+Mesh* modelMesh  = ModelLoader::LoadMesh("assets/models/liberator.obj");
+
+// Attach to an object with a material
+auto* cubeObj = Instantiate(new GameObject("Cube"));
+cubeObj->AddComponent<MeshRenderer>(cubeMesh, material);
+```
+
+### 2D Screen UI: ImageRenderer & Button
+
+Screen-space UI coordinates are normalized to the range `[-0.5, +0.5]`:
+
+- **Position `(0, 0, 0)`:** Exact screen center
+- **Position `(0.5, 0.5, 0)`:** Top-right corner
+- **Position `(-0.5, -0.5, 0)`:** Bottom-left corner
+- **Scale `(1, 1, 1)`:** Full screen width and height
+- **Scale `(0.5, 0.5, 1)`:** Half screen width and half screen height
+
+#### ImageRenderer
+Renders a 2D quad in screen space with an `ImageMaterial`:
+```cpp
+auto* panelObj = Instantiate(new GameObject(
+    "UIPanel",
+    glm::vec3(0.0f, 0.3f, 0.0f),
     glm::vec3(0.0f),
-    glm::vec3(1.0f)
+    glm::vec3(0.4f, 0.2f, 1.0f)
 ));
-
-auto* light = lightObject->AddComponent<LightSource>();
-light->color = glm::vec3(1.0f, 0.9f, 0.8f);
+panelObj->AddComponent<ImageRenderer>(imageMaterial, /* zOrder = */ 0);
 ```
 
-The maximum number of lights is `CONFIG::LIGHTING::MAX_LIGHTS`. The shader
-used for lighting must provide the uniform layout expected by the material and
-lighting code.
+#### Button
+Provides mouse hover and click events for UI elements:
+```cpp
+auto* button = panelObj->AddComponent<Button>(
+    []() {
+        Debug::Log("Button clicked!");
+    }
+);
+
+// Event hooks
+button->OnHoverEnterEvent.AddListener([]() { Debug::Log("Hover entered"); });
+button->OnHoverExitEvent.AddListener([]() { Debug::Log("Hover exited"); });
+
+// Disable/enable interaction without removing the component
+button->interactable = true;
+```
+
+### Text Rendering: World & Screen Space
+
+Simple Engine uses FreeType to render TrueType (`.ttf`) and OpenType (`.otf`) fonts.
+
+```cpp
+// 1. World-Space Text (anchored in 3D world, rotates/scales with transform, depth-tested)
+auto* worldTextObj = Instantiate(new GameObject("SignText", glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0.0f), glm::vec3(0.25f)));
+worldTextObj->AddComponent<WorldTextRenderer>(
+    "Castle Entrance",
+    "assets/fonts/arial.ttf",
+    48, // font pixel size
+    textMaterial,
+    /* zOrder = */ 0
+);
+
+// 2. Screen-Space Text (HUD, menus, subtitles; uses normalized [-0.5, +0.5] screen coordinates)
+auto* hudTextObj = Instantiate(new GameObject("HUDScore", glm::vec3(-0.4f, 0.45f, 0.0f), glm::vec3(0.0f), glm::vec3(0.2f, 0.08f, 1.0f)));
+hudTextObj->AddComponent<ScreenTextRenderer>(
+    "Score: 100",
+    "assets/fonts/arial.ttf",
+    48,
+    textMaterial,
+    /* zOrder = */ 1
+);
+```
+
+### Lighting
+
+Add `LightSource` to an object to include it in lighting calculations:
+
+```cpp
+auto* lightObj = Instantiate(new GameObject("Sun", glm::vec3(5.0f, 10.0f, 5.0f), glm::vec3(0.0f), glm::vec3(1.0f)));
+auto* light = lightObj->AddComponent<LightSource>();
+light->color = glm::vec3(1.0f, 0.95f, 0.8f);
+```
+
+The maximum active lights transmitted to shaders is controlled by `CONFIG::LIGHTING::MAX_LIGHTS` (default `256`).
+
+---
 
 ## Input
 
-Keyboard state is available through `Input`:
+Input polling is available globally through the `Input` static class:
 
+### Keyboard
 ```cpp
-Input::GetKey(GLFW_KEY_A);       // held
-Input::GetKeyDown(GLFW_KEY_A);   // pressed since the previous frame
-Input::GetKeyUp(GLFW_KEY_A);     // released since the previous frame
+Input::GetKey(GLFW_KEY_W);       // True while held down
+Input::GetKeyDown(GLFW_KEY_W);   // True only on the frame the key was pressed
+Input::GetKeyUp(GLFW_KEY_W);     // True only on the frame the key was released
 ```
 
-Mouse data is available through:
-
+### Mouse
 ```cpp
-Input::MousePosition;
-Input::MouseDelta;
+glm::vec2 pos = Input::MousePosition;  // Window pixel coordinates (origin at top-left)
+glm::vec2 delta = Input::MouseDelta;    // Mouse movement delta since last frame
+
 Input::GetMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
 Input::GetMouseButtonUp(GLFW_MOUSE_BUTTON_LEFT);
 ```
 
-`MouseDelta` is reset at the end of each frame. Despite their names,
-`GetMouseButtonDown()` and `GetMouseButtonUp()` currently report the current
-pressed and released states respectively; they are not edge-triggered like
-the keyboard methods.
+### Cursor Visibility
+Control system mouse cursor visibility via `PublicDomain`:
+```cpp
+PublicDomain::ChangeCursorVisibility(true);  // Normal visible cursor
+PublicDomain::ChangeCursorVisibility(false); // Locked & hidden for FPS cameras
+```
+
+---
 
 ## Physics
 
 ### Rigidbodies
-
-Add a `Rigidbody` to participate in physics integration:
+Attach a `Rigidbody` to apply gravity and forces:
 
 ```cpp
-auto* body = cubeObject->AddComponent<Rigidbody>();
-body->mass = 1.0f;
-body->gravityScale = 1.0f;
-body->drag = 0.1f;
-body->AddForce(glm::vec3(5.0f, 0.0f, 0.0f));
-body->AddImpulse(glm::vec3(0.0f, 4.0f, 0.0f));
+auto* rb = object->AddComponent<Rigidbody>();
+rb->mass = 1.0f;
+rb->useGravity = true;
+rb->gravityScale = 1.0f;
+rb->drag = 0.05f;
+
+// Continuous force (accumulates until next physics step)
+rb->AddForce(glm::vec3(0.0f, 10.0f, 0.0f));
+
+// Instantaneous velocity change
+rb->AddImpulse(glm::vec3(0.0f, 5.0f, 0.0f));
 ```
 
-`AddForce()` accumulates force until the next physics update. `AddImpulse()`
-changes velocity immediately. Set `useGravity` to `false` for a body that
-should not receive gravity. Set `isKinematic` to `true` to exclude it from
-automatic integration; move its transform yourself.
-
-### Box colliders
-
-`BoxCollider` uses an axis-aligned bounding box:
+### Box Colliders
+Attach a `BoxCollider` for axis-aligned bounding box collisions:
 
 ```cpp
-auto* collider = cubeObject->AddComponent<BoxCollider>(
-    false,                 // isTrigger
-    glm::vec3(0.0f),       // center offset
-    glm::vec3(1.0f)        // size
+auto* collider = object->AddComponent<BoxCollider>(
+    /* isTrigger = */ false,
+    /* center = */ glm::vec3(0.0f),
+    /* size = */ glm::vec3(1.0f)
 );
 ```
 
-Non-trigger colliders are resolved by moving rigidbodies apart. Trigger
-colliders do not receive physical resolution. `BoxCollider::IsCollidingWith()`
-can be used for a direct overlap test.
+- Physical collisions automatically separate rigidbodies and resolve velocities along collision normals.
+- When `isTrigger` is `true`, no physical force or separation is applied.
 
-The current collision implementation uses world position plus collider center
-and size. It does not apply object rotation or scale to the collider bounds.
-Physics uses `CONFIG::PHYSICS::MAX_DELTA_TIME` to cap the integration step.
+---
 
 ## Audio
 
-Audio is initialized and shut down automatically by `Engine::run()`:
+Audio is powered by miniaudio. The audio subsystem is automatically initialized by `Engine::setup()` and uninitialized on shutdown:
 
 ```cpp
-AudioSource music("audio/music.ogg");
-music.Play();
+AudioSource sfx("assets/audio/explosion.wav");
+sfx.Play();
 ```
 
-Audio paths are relative to `CONFIG::DIRECTORY::AUDIO`, which defaults to
-`assets/`. The example therefore loads `assets/audio/music.ogg`.
+---
 
-For explicit initialization in a custom lifecycle, use `AudioSource::Init()`
-and `AudioSource::Shutdown()`, and ensure they are called only once per
-miniaudio engine lifetime.
+## Timers and Tweens
 
-## Time, timers, and tweens
+Timers and Tweens are allocated on the heap via constructors. They register themselves automatically with the engine and update every frame:
 
-Per-frame timing is exposed through `Time`:
-
+### Timers
 ```cpp
-float seconds = Time::time;
-float dt = Time::deltaTime;
-float fps = Time::FPS;
-Time::timeScale = 0.5f;
-```
+// One-shot timer
+new Timer(2.0f, /* repeating = */ false, []() {
+    Debug::Log("2 seconds elapsed!");
+});
 
-`deltaTime` is scaled by `timeScale`. Physics additionally clamps its step to
-`CONFIG::PHYSICS::MAX_DELTA_TIME`.
-
-Create a one-shot or repeating timer:
-
-```cpp
-Timer::Create(2.0f, false, []
-{
-    Debug::Log("Two seconds elapsed");
+// Repeating timer
+new Timer(0.5f, /* repeating = */ true, []() {
+    Debug::Log("Tick every 0.5s");
 });
 ```
 
-Tween a numeric value or GLM vector:
+### Tweens
+Interpolates a target variable smoothly over time (supports `float`, `double`, `int`, and GLM vectors):
 
 ```cpp
-Tween::Create(
-    &cubeObject->transform->position,
-    glm::vec3(0.0f),
-    glm::vec3(0.0f, 2.0f, 0.0f),
-    1.0f,
-    nullptr,
-    [] { Debug::Log("Tween complete"); }
+new Tween(
+    &playerObject->transform->position,      // Target variable pointer
+    glm::vec3(0.0f, 0.0f, 0.0f),              // Start value
+    glm::vec3(0.0f, 5.0f, 0.0f),              // Target value
+    1.5f,                                     // Duration in seconds
+    nullptr,                                  // Optional easing function: float(float t)
+    []() { Debug::Log("Jump tween complete!"); } // Optional onComplete callback
 );
 ```
 
-Timers and tweens are updated automatically by the engine loop. The pointer
-passed to `Tween::Create()` must remain valid until the tween completes.
+---
 
-## Configuration
+## Engine Configuration
 
-Edit `Config.h` before building the consuming application to set defaults:
+Engine defaults can be modified in `Config.h`:
 
-| Namespace           | Examples                                                      |
-| ------------------- | ------------------------------------------------------------- |
-| `CONFIG::ENGINE`    | OpenGL version, first-scene loading, debug mode               |
-| `CONFIG::RENDERING` | Depth testing, face culling, cursor visibility, vsync setting |
-| `CONFIG::LIGHTING`  | Background color and maximum light count                      |
-| `CONFIG::PHYSICS`   | Gravity and maximum physics timestep                          |
-| `CONFIG::WINDOW`    | Initial title, width, and height                              |
-| `CONFIG::DIRECTORY` | Asset, shader, texture, and audio roots                       |
+| Namespace | Key Settings |
+| :--- | :--- |
+| `CONFIG::ENGINE` | `VERSION`, OpenGL context version (`3.3`), `LOAD_FIRST_SCENE`, `ENABLE_DEBUG` |
+| `CONFIG::RENDERING` | `ENABLE_DEPTH_TEST`, `FACE_CULLING`, `HIDE_CURSOR`, `ENABLE_VSYNC` |
+| `CONFIG::LIGHTING` | `BACKGROUND_COLOR`, `MAX_LIGHTS` (defaults to 256) |
+| `CONFIG::PHYSICS` | `GRAVITY` (defaults to `-9.81` on Y), `MAX_DELTA_TIME` (`0.1f`) |
+| `CONFIG::WINDOW` | `TITLE`, `WIDTH`, `HEIGHT` |
 
-Some runtime values are copied into `PublicDomain` during static
-initialization. Use these values when changing settings at runtime:
-
+Runtime overrides can be adjusted dynamically via `PublicDomain`:
 ```cpp
-PublicDomain::Lighting::BackgroundColor =
-    glm::vec4(0.05f, 0.08f, 0.12f, 1.0f);
-
-PublicDomain::Physics::Gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+PublicDomain::Lighting::BackgroundColor = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+PublicDomain::Physics::Gravity = glm::vec3(0.0f, -19.6f, 0.0f);
 PublicDomain::Rendering::EnableDepthTest = true;
 PublicDomain::Rendering::FaceCulling = FACE_CULLING_MODE::BACK;
 ```
 
-`EnableDepthTest` and face culling are applied during engine setup. Change
-these before `Engine::run()` if you need different startup behavior.
+---
 
-## Frame order
+## Resource Ownership and Cleanup
 
-Each frame currently runs in this order:
+Simple Engine uses direct raw pointers for resources (`Shader*`, `Texture*`, `Material*`, `Mesh*`).
 
-1. Poll window events.
-2. Clear the color and depth buffers.
-3. Update `Time`.
-4. Update keyboard input.
-5. Update physics.
-6. Update the active scene and behaviours.
-7. Update tweens and timers.
-8. Render scene objects.
-9. Finish debug and input frame state.
-10. Swap the window buffers.
+- Resources created with `new` are owned by the scene or manager that created them.
+- When overriding `Scene::Unload()`, clean up any resources instantiated during `Setup()`:
 
-This order means forces added from a behaviour are integrated on the next
-physics pass, while changes made directly to transforms are visible during the
-same frame's rendering pass.
+```cpp
+void MainScene::Unload() override
+{
+    Scene::Unload(); // Clears all game objects
 
-## Shutdown and resource lifetime
+    delete myMaterial;
+    myMaterial = nullptr;
 
-Closing the primary window exits `Engine::run()`. The engine unloads the active
-scene, shuts down audio, and terminates GLFW.
+    delete myTexture;
+    myTexture = nullptr;
 
-OpenGL-backed resources must be destroyed while a valid OpenGL context still
-exists. If an application manages shader storage outside the normal engine
-lifetime, call `Shader::Clear()` before destroying the window/context.
+    delete myShader;
+    myShader = nullptr;
+}
+```
 
-## Common issues
+---
 
-- **No object appears:** verify that the scene has a `Camera`, the camera is
-  the first camera created, and the object has a `MeshRenderer` with a valid
-  material.
-- **Shader files are not found:** paths are resolved relative to
-  `CONFIG::DIRECTORY::SHADERS` and the process working directory. A path such
-  as `shaders/default` resolves to `assets/shaders/default.vert` and
-  `assets/shaders/default.frag` by default.
-- **Textures do not load:** verify the path relative to `assets/` and check
-  `Texture::Get()`/the engine error output for the registered name.
-- **Lighting has no effect:** verify that the active shader declares the light
-  uniforms expected by `Rendering` and that the light object has a valid
-  transform.
-- **Physics behaves unexpectedly:** remember that colliders are axis-aligned
-  and do not account for transform rotation or scale.
-- **Startup scene is unexpected:** `LOAD_FIRST_SCENE` loads scene index `0`.
-  Prefer a single registered startup scene when using the default behavior.
+## Common Issues & Troubleshooting
+
+- **Black screen / nothing appears:** Verify that a `Camera` exists in the scene, and that the object has a renderer (`MeshRenderer` or `ImageRenderer`) with a valid `Material` and `Shader`.
+- **Assets or shaders fail to load:** Ensure paths begin with `"assets/..."` (e.g. `"assets/shaders/Image.vert"`). Check that the post-build step in `CMakeLists.txt` successfully copied the `assets` folder next to your built binary.
+- **Text does not appear:** Confirm that FreeType successfully loaded your font path, that the `TextRenderer` scale is non-zero, and that `TextMaterial` has a valid shader assigned.
+- **Lighting appears completely dark:** Check that at least one `GameObject` in the scene has an active `LightSource` component and that the material shader declares the required `numLights` and `lights[...]` uniforms.
