@@ -21,7 +21,7 @@ class Physics
 public:
     static void Update()
     {
-        const float dt = glm::min(
+        const float dt = (glm::min)(
             Time::deltaTime,
             CONFIG::PHYSICS::MAX_DELTA_TIME
         );
@@ -243,7 +243,7 @@ private:
                 1.0f - body->drag * dt;
 
             body->velocity *=
-                glm::max(damping, 0.0f);
+                (glm::max)(damping, 0.0f);
         }
 
         body->transform->position +=
@@ -279,9 +279,10 @@ private:
         if (a->isTrigger || b->isTrigger)
             return true;
 
-        const float penetrationX = glm::min(aMax.x - bMin.x, bMax.x - aMin.x);
-        const float penetrationY = glm::min(aMax.y - bMin.y, bMax.y - aMin.y);
-        const float penetrationZ = glm::min(aMax.z - bMin.z, bMax.z - aMin.z);
+
+        const float penetrationX = (glm::min)(aMax.x - bMin.x, bMax.x - aMin.x);
+        const float penetrationY = (glm::min)(aMax.y - bMin.y, bMax.y - aMin.y);
+        const float penetrationZ = (glm::min)(aMax.z - bMin.z, bMax.z - aMin.z);
 
         float penetration = penetrationX;
         glm::vec3 normal(1.0f, 0.0f, 0.0f);
@@ -340,8 +341,8 @@ private:
         if (a->isTrigger || b->isTrigger)
             return true;
 
-        const float penetrationX = glm::min(aMax.x - bMin.x, bMax.x - aMin.x);
-        const float penetrationY = glm::min(aMax.y - bMin.y, bMax.y - aMin.y);
+        const float penetrationX = (glm::min)(aMax.x - bMin.x, bMax.x - aMin.x);
+        const float penetrationY = (glm::min)(aMax.y - bMin.y, bMax.y - aMin.y);
 
         float penetration = penetrationX;
         glm::vec3 normal(1.0f, 0.0f, 0.0f);

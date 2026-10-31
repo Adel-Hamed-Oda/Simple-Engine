@@ -98,7 +98,6 @@ public:
     }
 
     template <typename T>
-        requires std::derived_from<T, Component>
     T* GetComponent()
     {
         for (const auto& component : components)
