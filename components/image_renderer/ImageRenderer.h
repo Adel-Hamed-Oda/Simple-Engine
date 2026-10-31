@@ -1,8 +1,11 @@
 #pragma once
 
 #include <glad/gl.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <cstddef>
+#include <memory>
 
 #include "../Component.h"
 #include "../../core/rendering/material/ImageMaterial.h"
@@ -14,11 +17,22 @@
 class ImageRenderer : public Component
 {
 public:
+    // Local offset in the owner Transform's space (e.g. (0, 0.62) places the quad above the owner).
+    glm::vec2 offset{ 0.0f, 0.0f };
+
+    // Local size multiplier relative to the owner Transform's scale (1.0 matches the unit quad).
+    glm::vec2 size{ 1.0f, 1.0f };
+
     explicit ImageRenderer(ImageMaterial* material, int zOrder = 0)
         : material(material),
           zOrder(zOrder)
     {
         EnsureQuadInitialized();
+    }
+
+    explicit ImageRenderer(const std::unique_ptr<ImageMaterial>& material, int zOrder = 0)
+        : ImageRenderer(material.get(), zOrder)
+    {
     }
 
     ~ImageRenderer() override = default;
@@ -36,6 +50,15 @@ public:
 
         if (!material->SetupScreenSpaceUniforms(transform))
             return;
+
+        if (offset.x != 0.0f || offset.y != 0.0f || size.x != 1.0f || size.y != 1.0f)
+        {
+            glm::mat4 model = transform->GetModelMatrix();
+            model = glm::translate(model, glm::vec3(offset.x, offset.y, 0.0f));
+            model = glm::scale(model, glm::vec3(size.x, size.y, 1.0f));
+            material->shader->setMat4("model", model);
+        }
+
         material->ApplyMaterial();
 
         const GLboolean blendEnabled = glIsEnabled(GL_BLEND);

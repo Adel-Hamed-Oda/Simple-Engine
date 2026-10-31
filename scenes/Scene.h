@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -19,17 +20,40 @@ public:
 
     virtual void Start()
     {
-        for (const auto& obj : gameObjects)
+        for (size_t i = 0; i < gameObjects.size(); ++i)
         {
-            obj->Start();
+            if (gameObjects[i])
+                gameObjects[i]->Start();
         }
     }
 
     virtual void Update()
     {
+        // Snapshot current object pointers so Instantiate/Destroy inside Update()
+        // cannot invalidate vector iterators.
+        std::vector<GameObject*> snapshot;
+        snapshot.reserve(gameObjects.size());
         for (const auto& obj : gameObjects)
         {
-            obj->Update();
+            if (obj)
+                snapshot.push_back(obj.get());
+        }
+
+        for (GameObject* obj : snapshot)
+        {
+            auto it = std::find_if(
+                gameObjects.begin(),
+                gameObjects.end(),
+                [obj](const std::unique_ptr<GameObject>& owned)
+                {
+                    return owned.get() == obj;
+                }
+            );
+
+            if (it != gameObjects.end() && *it)
+            {
+                (*it)->Update();
+            }
         }
     }
 

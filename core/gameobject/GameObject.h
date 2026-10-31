@@ -42,17 +42,23 @@ public:
 
     void Start()
     {
-        for (const auto& component : components)
+        hasStarted = true;
+        for (size_t i = 0; i < components.size(); ++i)
         {
-            component->Start();
+            if (components[i])
+                components[i]->Start();
         }
     }
 
     void Update()
     {
-        for (const auto& component : components)
+        if (!hasStarted)
+            Start();
+
+        for (size_t i = 0; i < components.size(); ++i)
         {
-            component->Update();
+            if (components[i])
+                components[i]->Update();
         }
     }
 
@@ -98,7 +104,7 @@ public:
     }
 
     template <typename T>
-    T* GetComponent()
+    T* GetComponent() const
     {
         for (const auto& component : components)
         {
@@ -111,6 +117,22 @@ public:
         return nullptr;
     }
 
+    template <typename T>
+    std::vector<T*> GetComponents() const
+    {
+        std::vector<T*> result;
+        for (const auto& component : components)
+        {
+            if (T* t = dynamic_cast<T*>(component.get()))
+            {
+                result.push_back(t);
+            }
+        }
+
+        return result;
+    }
+
 private:
     std::vector<std::unique_ptr<Component>> components;
+    bool hasStarted = false;
 };

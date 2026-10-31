@@ -80,8 +80,7 @@ public:
 
 			Transform* transform = obj->transform.get();
 
-			if (MeshRenderer* meshRenderer =
-					obj->GetComponent<MeshRenderer>())
+			for (MeshRenderer* meshRenderer : obj->GetComponents<MeshRenderer>())
 			{
 				Material* material = meshRenderer->GetMaterial();
 
@@ -93,8 +92,7 @@ public:
 				}
 			}
 
-			if (ImageRenderer* imageRenderer =
-					obj->GetComponent<ImageRenderer>())
+			for (ImageRenderer* imageRenderer : obj->GetComponents<ImageRenderer>())
 			{
 				deferredScreenDrawItems.push_back(ScreenDrawItem{
 					imageRenderer->GetZOrder(),
@@ -103,8 +101,7 @@ public:
 				});
 			}
 
-			if (TextRenderer* textRenderer =
-					obj->GetComponent<TextRenderer>())
+			for (TextRenderer* textRenderer : obj->GetComponents<TextRenderer>())
 			{
 				if (textRenderer->IsScreenSpace())
 				{
