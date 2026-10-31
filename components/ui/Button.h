@@ -15,10 +15,10 @@
 class Button : public Component
 {
 public:
-    Event OnClickEvent;
+    Event<> OnClickEvent;
 
-    Event OnHoverEnterEvent;
-    Event OnHoverExitEvent;
+    Event<> OnHoverEnterEvent;
+    Event<> OnHoverExitEvent;
 
     // Local size multiplier relative to transform->scale (1.0 matches ImageRenderer's unit quad).
     glm::vec2 size{ 1.0f, 1.0f };

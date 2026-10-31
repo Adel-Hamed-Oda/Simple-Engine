@@ -1,16 +1,22 @@
 #pragma once
 
+#include <concepts>
 #include <functional>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
+template <typename... Args>
 struct Event
 {
-    std::vector<std::function<void()>> listeners;
+    using Callback = std::function<void(Args...)>;
+
+    std::vector<Callback> listeners;
 
     Event() = default;
     Event(std::nullptr_t) {}
 
-    Event(std::function<void()> callback)
+    Event(Callback callback)
     {
         if (callback)
             listeners.push_back(std::move(callback));
@@ -22,7 +28,7 @@ struct Event
         return *this;
     }
 
-    Event& operator=(std::function<void()> callback)
+    Event& operator=(Callback callback)
     {
         listeners.clear();
         if (callback)
@@ -30,29 +36,43 @@ struct Event
         return *this;
     }
 
-    Event& operator+=(std::function<void()> callback)
+    Event& operator+=(Callback callback)
     {
         if (callback)
             listeners.push_back(std::move(callback));
         return *this;
     }
 
-    void AddListener(std::function<void()> callback)
+    void AddListener(Callback callback)
     {
         if (callback)
             listeners.push_back(std::move(callback));
     }
 
-    template <typename Func, typename Arg, typename... Args>
-    void AddListener(Func&& func, Arg&& arg, Args&&... args)
+    template <typename Func, typename Arg, typename... BoundArgs>
+    void AddListener(Func&& func, Arg&& arg, BoundArgs&&... boundArgs)
     {
-        listeners.emplace_back(
-            std::bind(
-                std::forward<Func>(func),
-                std::forward<Arg>(arg),
-                std::forward<Args>(args)...
-            )
-        );
+        if constexpr (std::invocable<std::decay_t<Func>, std::decay_t<Arg>, std::decay_t<BoundArgs>..., Args...>)
+        {
+            listeners.emplace_back(
+                [f = std::forward<Func>(func),
+                 firstArg = std::forward<Arg>(arg),
+                 ...restArgs = std::forward<BoundArgs>(boundArgs)](Args... eventArgs) mutable
+                {
+                    std::invoke(f, firstArg, restArgs..., eventArgs...);
+                }
+            );
+        }
+        else
+        {
+            listeners.emplace_back(
+                std::bind(
+                    std::forward<Func>(func),
+                    std::forward<Arg>(arg),
+                    std::forward<BoundArgs>(boundArgs)...
+                )
+            );
+        }
     }
 
     void Clear()
@@ -60,19 +80,19 @@ struct Event
         listeners.clear();
     }
 
-    void Invoke() const
+    void Invoke(Args... args) const
     {
         auto currentListeners = listeners;
         for (const auto& listener : currentListeners)
         {
             if (listener)
-                listener();
+                listener(args...);
         }
     }
 
-    void operator()() const
+    void operator()(Args... args) const
     {
-        Invoke();
+        Invoke(args...);
     }
 
     explicit operator bool() const
@@ -80,3 +100,8 @@ struct Event
         return !listeners.empty();
     }
 };
+
+Event() -> Event<>;
+Event(std::nullptr_t) -> Event<>;
+template <typename... Args>
+Event(std::function<void(Args...)>) -> Event<Args...>;

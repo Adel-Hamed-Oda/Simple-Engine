@@ -8,7 +8,7 @@
 class BoxCollider : public Collider
 {
 public:
-    bool isTrigger;
+    glm::vec3 center;
     glm::vec3 size;
 
     explicit BoxCollider(
@@ -16,30 +16,36 @@ public:
         glm::vec3 center = glm::vec3(0.0f),
         glm::vec3 size = glm::vec3(1.0f)
     )
-        : Collider(center),
-        isTrigger(isTrigger),
-        size(size)
+        : Collider(isTrigger),
+          center(center),
+          size(size)
     {
     }
 
     bool IsCollidingWith(const BoxCollider& other) const
     {
-        glm::vec3 thisMin =
+        if (&other == this || !transform || !other.transform)
+            return false;
+
+        if (owner && other.owner == owner)
+            return false;
+
+        const glm::vec3 thisMin =
             transform->position +
             center -
             size * 0.5f;
 
-        glm::vec3 thisMax =
+        const glm::vec3 thisMax =
             transform->position +
             center +
             size * 0.5f;
 
-        glm::vec3 otherMin =
+        const glm::vec3 otherMin =
             other.transform->position +
             other.center -
             other.size * 0.5f;
 
-        glm::vec3 otherMax =
+        const glm::vec3 otherMax =
             other.transform->position +
             other.center +
             other.size * 0.5f;

@@ -16,6 +16,7 @@
 #include "physics/BoxCollider.h"
 #include "physics/Collider.h"
 #include "physics/Rigidbody.h"
+#include "physics/SquareCollider.h"
 
 #include "ui/Button.h"
 
