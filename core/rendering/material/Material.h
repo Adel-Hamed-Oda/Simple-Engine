@@ -10,6 +10,8 @@
 #include "../../transform/Transform.h"
 #include "../shader/Shader.h"
 
+class Texture;
+
 // A Material holds shared, per-shader data (colors, textures, shininess, ...).
 // It is NOT a Component: it isn't attached to one GameObject, so it has no
 // transform of its own. The object being drawn passes its Transform in.
@@ -30,6 +32,9 @@ public:
 	}
 
 	virtual ~Material() = default;
+
+	virtual Texture* GetTexture() const { return nullptr; }
+	virtual void SetTexture(Texture* /*tex*/) {}
 
 	// Binds the shader program, then uploads model/view/projection/viewer position.
 	// Returns false if the object can't be drawn (missing shader or camera).

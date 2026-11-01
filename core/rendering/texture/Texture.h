@@ -29,6 +29,12 @@ enum class TextureFilterMode
     LINEAR_MIPMAP_LINEAR = GL_LINEAR_MIPMAP_LINEAR
 };
 
+enum class TextureLoadMode
+{
+    NORMAL,
+    MONOTONE
+};
+
 class Texture
 {
 public:
@@ -36,52 +42,20 @@ public:
 
     TextureWrapMode wrapMode = TextureWrapMode::REPEAT;
     TextureFilterMode filterMode = TextureFilterMode::LINEAR;
+    TextureLoadMode loadMode = TextureLoadMode::NORMAL;
 
-    Texture() = default;
-
+    // Single primary constructor for loading a texture from a file path
     explicit Texture(
         const std::string& texturePath,
+        TextureLoadMode loadMode = TextureLoadMode::NORMAL,
         TextureWrapMode wrap = TextureWrapMode::REPEAT,
         TextureFilterMode filter = TextureFilterMode::LINEAR
     )
         : wrapMode(wrap),
-          filterMode(filter)
+          filterMode(filter),
+          loadMode(loadMode)
     {
-        stbi_set_flip_vertically_on_load(true);
-        int width = 0, height = 0, nrChannels = 0;
-        unsigned char* data = stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
-
-        if (!data)
-        {
-            std::cerr << "ERROR::TEXTURE::FILE_NOT_FOUND_OR_READ_FAILED: " << texturePath << std::endl;
-            stbi_set_flip_vertically_on_load(false);
-            return;
-        }
-
-        UploadToGPU(data, width, height, nrChannels);
-
-        stbi_image_free(data);
-        stbi_set_flip_vertically_on_load(false);
-    }
-
-    Texture(
-        const unsigned char* data,
-        int width,
-        int height,
-        int nrChannels,
-        TextureWrapMode wrap = TextureWrapMode::REPEAT,
-        TextureFilterMode filter = TextureFilterMode::LINEAR
-    )
-        : wrapMode(wrap),
-          filterMode(filter)
-    {
-        if (!data || width <= 0 || height <= 0)
-        {
-            std::cerr << "ERROR::TEXTURE::CREATION_FROM_PIXELS_FAILED" << std::endl;
-            return;
-        }
-
-        UploadToGPU(data, width, height, nrChannels);
+        LoadFromFile(texturePath);
     }
 
     ~Texture()
@@ -90,14 +64,75 @@ public:
             glDeleteTextures(1, &ID);
     }
 
-    Texture(const Texture&) = delete;
-    Texture& operator=(const Texture&) = delete;
+    // Copy Constructor with loadMode override (e.g. creating a MONOTONE copy of an existing texture)
+    Texture(const Texture& other, TextureLoadMode newLoadMode)
+        : wrapMode(other.wrapMode),
+          filterMode(other.filterMode),
+          loadMode(newLoadMode),
+          path(other.path),
+          width(other.width),
+          height(other.height),
+          nrChannels(other.nrChannels),
+          rawPixels(other.rawPixels)
+    {
+        if (!rawPixels.empty())
+        {
+            LoadFromPixels(rawPixels.data(), width, height, nrChannels);
+        }
+        else if (!path.empty())
+        {
+            LoadFromFile(path);
+        }
+    }
+
+    // Standard copy constructor using the other texture's current loadMode
+    Texture(const Texture& other)
+        : Texture(other, other.loadMode)
+    {
+    }
+
+    Texture& operator=(const Texture& other)
+    {
+        if (this != &other)
+        {
+            if (ID != 0)
+                glDeleteTextures(1, &ID);
+            ID = 0;
+            wrapMode = other.wrapMode;
+            filterMode = other.filterMode;
+            loadMode = other.loadMode;
+            path = other.path;
+            width = other.width;
+            height = other.height;
+            nrChannels = other.nrChannels;
+            rawPixels = other.rawPixels;
+
+            if (!rawPixels.empty())
+            {
+                LoadFromPixels(rawPixels.data(), width, height, nrChannels);
+            }
+            else if (!path.empty())
+            {
+                LoadFromFile(path);
+            }
+        }
+        return *this;
+    }
 
     Texture(Texture&& other) noexcept
         : ID(std::exchange(other.ID, 0)),
           wrapMode(other.wrapMode),
-          filterMode(other.filterMode)
+          filterMode(other.filterMode),
+          loadMode(other.loadMode),
+          path(std::move(other.path)),
+          width(other.width),
+          height(other.height),
+          nrChannels(other.nrChannels),
+          monotoneCache(std::move(other.monotoneCache))
     {
+        other.width = 0;
+        other.height = 0;
+        other.nrChannels = 0;
     }
 
     Texture& operator=(Texture&& other) noexcept
@@ -109,9 +144,50 @@ public:
             ID = std::exchange(other.ID, 0);
             wrapMode = other.wrapMode;
             filterMode = other.filterMode;
+            loadMode = other.loadMode;
+            path = std::move(other.path);
+            width = other.width;
+            height = other.height;
+            nrChannels = other.nrChannels;
+            rawPixels = std::move(other.rawPixels);
+            monotoneCache = std::move(other.monotoneCache);
+            other.width = 0;
+            other.height = 0;
+            other.nrChannels = 0;
         }
         return *this;
     }
+
+    // Creates a deep copy of this texture with the current loadMode
+    Texture* Copy() const
+    {
+        return new Texture(*this, this->loadMode);
+    }
+
+    // Creates a deep copy of this texture with a specific loadMode (e.g. MONOTONE for overlays)
+    Texture* Copy(TextureLoadMode newLoadMode) const
+    {
+        return new Texture(*this, newLoadMode);
+    }
+
+    // Returns a cached MONOTONE copy of this texture for overlays (lifetime managed by this Texture)
+    Texture* GetMonotoneTexture() const
+    {
+        if (loadMode == TextureLoadMode::MONOTONE)
+            return const_cast<Texture*>(this);
+
+        if (!monotoneCache)
+        {
+            monotoneCache = std::unique_ptr<Texture>(this->Copy(TextureLoadMode::MONOTONE));
+        }
+        return monotoneCache.get();
+    }
+
+    const std::string& GetPath() const { return path; }
+    int GetWidth() const { return width; }
+    int GetHeight() const { return height; }
+    int GetChannels() const { return nrChannels; }
+    const std::vector<unsigned char>& GetRawPixels() const { return rawPixels; }
 
     // =========================================================================
     // Texture Sheet / Atlas Slicing (returns std::vector<Texture*>)
@@ -121,11 +197,13 @@ public:
     // - size: pixel dimensions (width, height) of each tile (must be positive).
     // - offset: pixel padding/offset between tiles (cannot be negative).
     // - limit: -1 for no limit, otherwise caps the maximum number of textures created.
+    // - loadMode: NORMAL or MONOTONE (non-transparent pixels become pure white).
     static std::vector<Texture*> CreateTextureMap(
         const std::string& path,
         glm::vec2 size,
         glm::vec2 offset = glm::vec2(0.0f),
         int limit = -1,
+        TextureLoadMode loadMode = TextureLoadMode::NORMAL,
         TextureWrapMode wrap = TextureWrapMode::REPEAT,
         TextureFilterMode filter = TextureFilterMode::LINEAR
     )
@@ -213,6 +291,7 @@ public:
                     tileWidth,
                     tileHeight,
                     nrChannels,
+                    loadMode,
                     wrap,
                     filter
                 );
@@ -247,8 +326,170 @@ public:
     }
 
 private:
+    std::string path;
+    int width = 0;
+    int height = 0;
+    int nrChannels = 0;
+    std::vector<unsigned char> rawPixels;
+    mutable std::unique_ptr<Texture> monotoneCache = nullptr;
+
+    // Private constructor used internally by CreateTextureMap when slicing tiles from memory
+    Texture(
+        const unsigned char* data,
+        int width,
+        int height,
+        int nrChannels,
+        TextureLoadMode loadMode,
+        TextureWrapMode wrap,
+        TextureFilterMode filter
+    )
+        : wrapMode(wrap),
+          filterMode(filter),
+          loadMode(loadMode)
+    {
+        LoadFromPixels(data, width, height, nrChannels);
+    }
+
+    void LoadFromFile(const std::string& texturePath)
+    {
+        path = texturePath;
+        stbi_set_flip_vertically_on_load(true);
+        int w = 0, h = 0, channels = 0;
+        unsigned char* data = stbi_load(texturePath.c_str(), &w, &h, &channels, 0);
+
+        if (!data)
+        {
+            std::cerr << "ERROR::TEXTURE::FILE_NOT_FOUND_OR_READ_FAILED: " << texturePath << std::endl;
+            stbi_set_flip_vertically_on_load(false);
+            return;
+        }
+
+        width = w;
+        height = h;
+        nrChannels = channels;
+        rawPixels.assign(data, data + (static_cast<size_t>(w) * static_cast<size_t>(h) * static_cast<size_t>(channels)));
+
+        if (loadMode != TextureLoadMode::NORMAL)
+        {
+            int procChannels = nrChannels;
+            std::vector<unsigned char> processed = ProcessPixelData(data, width, height, procChannels, loadMode);
+            if (!processed.empty())
+            {
+                UploadToGPU(processed.data(), width, height, procChannels);
+            }
+            else
+            {
+                UploadToGPU(data, width, height, nrChannels);
+            }
+        }
+        else
+        {
+            UploadToGPU(data, width, height, nrChannels);
+        }
+
+        stbi_image_free(data);
+        stbi_set_flip_vertically_on_load(false);
+    }
+
+    void LoadFromPixels(const unsigned char* data, int w, int h, int channels)
+    {
+        if (!data || w <= 0 || h <= 0)
+        {
+            std::cerr << "ERROR::TEXTURE::CREATION_FROM_PIXELS_FAILED" << std::endl;
+            return;
+        }
+
+        width = w;
+        height = h;
+        nrChannels = channels;
+        if (rawPixels.data() != data)
+        {
+            rawPixels.assign(data, data + (static_cast<size_t>(w) * static_cast<size_t>(h) * static_cast<size_t>(channels)));
+        }
+
+        if (loadMode != TextureLoadMode::NORMAL)
+        {
+            int procChannels = nrChannels;
+            std::vector<unsigned char> processed = ProcessPixelData(data, width, height, procChannels, loadMode);
+            if (!processed.empty())
+            {
+                UploadToGPU(processed.data(), width, height, procChannels);
+            }
+            else
+            {
+                UploadToGPU(data, width, height, nrChannels);
+            }
+        }
+        else
+        {
+            UploadToGPU(data, width, height, nrChannels);
+        }
+    }
+
+    // Applies loadMode (MONOTONE turns non-transparent pixels into pure white for overlay tinting with material baseColor)
+    static std::vector<unsigned char> ProcessPixelData(
+        const unsigned char* data,
+        int width,
+        int height,
+        int& inOutChannels,
+        TextureLoadMode mode
+    )
+    {
+        if (!data || width <= 0 || height <= 0 || mode == TextureLoadMode::NORMAL)
+        {
+            return {};
+        }
+
+        const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
+        const int outChannels = (inOutChannels == 1) ? 3 : (inOutChannels == 2) ? 4 : inOutChannels;
+        const bool hasAlpha = (inOutChannels == 2 || inOutChannels == 4);
+
+        std::vector<unsigned char> processed(pixelCount * static_cast<size_t>(outChannels));
+
+        for (size_t i = 0; i < pixelCount; ++i)
+        {
+            unsigned char a = 255;
+
+            if (inOutChannels == 2)
+            {
+                a = data[i * 2 + 1];
+            }
+            else if (inOutChannels == 4)
+            {
+                a = data[i * 4 + 3];
+            }
+
+            unsigned char r = 0, g = 0, b = 0;
+            // MONOTONE: Any pixel that isn't transparent is loaded as completely white (used for overlays)
+            if (!hasAlpha || a > 0)
+            {
+                r = 255;
+                g = 255;
+                b = 255;
+            }
+
+            const size_t outIdx = i * static_cast<size_t>(outChannels);
+            processed[outIdx]     = r;
+            processed[outIdx + 1] = g;
+            processed[outIdx + 2] = b;
+            if (outChannels == 4)
+            {
+                processed[outIdx + 3] = a;
+            }
+        }
+
+        inOutChannels = outChannels;
+        return processed;
+    }
+
     void UploadToGPU(const unsigned char* data, int width, int height, int nrChannels)
     {
+        if (ID != 0)
+        {
+            glDeleteTextures(1, &ID);
+            ID = 0;
+        }
+
         unsigned int texID = 0;
         glGenTextures(1, &texID);
         glBindTexture(GL_TEXTURE_2D, texID);

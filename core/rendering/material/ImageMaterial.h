@@ -19,6 +19,9 @@ public:
 
 	~ImageMaterial() override = default;
 
+	Texture* GetTexture() const override { return texture; }
+	void SetTexture(Texture* tex) override { texture = tex; }
+
 	void ApplyMaterial() override
 	{
 		if (!shader || !shader->IsValid()) return;

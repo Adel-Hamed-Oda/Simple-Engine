@@ -43,6 +43,11 @@ public:
         this->material = material;
     }
 
+    Texture* GetTexture() const
+    {
+        return material ? material->GetTexture() : nullptr;
+    }
+
     void Draw() const
     {
         if (VAO == 0 || indicesCount == 0)
