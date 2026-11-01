@@ -132,6 +132,39 @@ public:
         return result;
     }
 
+    void SetParent(GameObject* newParent)
+    {
+        if (transform)
+        {
+            transform->parent = newParent ? newParent->transform.get() : nullptr;
+            if (newParent && newParent->transform)
+            {
+                newParent->transform->children.push_back(transform.get());
+            }
+        }
+    }
+
+    GameObject* GetParent() const
+    {
+        return (transform && transform->parent) ? transform->parent->owner : nullptr;
+    }
+
+    std::vector<GameObject*> GetChildren() const
+    {
+        std::vector<GameObject*> result;
+        if (transform)
+        {
+            for (Transform* child : transform->children)
+            {
+                if (child && child->owner)
+                {
+                    result.push_back(child->owner);
+                }
+            }
+        }
+        return result;
+    }
+
 private:
     std::vector<std::unique_ptr<Component>> components;
     bool hasStarted = false;

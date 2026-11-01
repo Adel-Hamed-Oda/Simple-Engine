@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <vector>
+#include <algorithm>
 
 class GameObject;
 
@@ -10,6 +12,7 @@ class Transform
 public:
     GameObject* owner = nullptr;
     Transform* parent = nullptr;
+    std::vector<Transform*> children;
 
     glm::vec3 position;
     glm::vec3 rotation;
@@ -19,6 +22,8 @@ public:
         : owner(owner), position(position), rotation(rotation), scale(scale) 
     {
     }
+
+    ~Transform() = default;
 
     glm::vec3 Forward() const
     {
@@ -50,8 +55,7 @@ public:
         );
     }
 
-    // Note: order is important here, won't be fixed until we start using quaternions
-    glm::mat4 GetRotationMatrix() const
+    glm::mat4 GetLocalRotationMatrix() const
     {
         glm::mat4 rotationMatrix(1.0f);
 
@@ -73,6 +77,13 @@ public:
             glm::vec3(0.0f, 0.0f, 1.0f)
         );
 
+        return rotationMatrix;
+    }
+
+    glm::mat4 GetRotationMatrix() const
+    {
+        glm::mat4 rotationMatrix = GetLocalRotationMatrix();
+
         if (parent)
         {
             rotationMatrix = parent->GetRotationMatrix() * rotationMatrix;
@@ -82,21 +93,30 @@ public:
 
     glm::mat4 GetModelMatrix() const
     {
-        glm::mat4 model(1.0f);
+        glm::mat4 localModel(1.0f);
 
         // Translation
-        model = glm::translate(model, position);
+        localModel = glm::translate(localModel, position);
 
         // Rotation
-        model *= GetRotationMatrix();
+        localModel *= GetLocalRotationMatrix();
 
         // Scale
-        model = glm::scale(model, scale);
+        localModel = glm::scale(localModel, scale);
 
         if (parent)
         {
-            model = parent->GetModelMatrix() * model;
+            return parent->GetModelMatrix() * localModel;
         }
-        return model;
+        return localModel;
+    }
+
+    glm::vec3 GetWorldPosition() const
+    {
+        if (parent)
+        {
+            return glm::vec3(parent->GetModelMatrix() * glm::vec4(position, 1.0f));
+        }
+        return position;
     }
 };

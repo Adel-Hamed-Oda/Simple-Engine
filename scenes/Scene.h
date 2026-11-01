@@ -100,6 +100,23 @@ public:
 
     bool Destroy(GameObject* gameObject)
     {
+        if (!gameObject)
+            return false;
+
+        // Use transform to iterate over each child GameObject and destroy these objects as well
+        if (gameObject->transform)
+        {
+            auto children = gameObject->transform->children;
+            gameObject->transform->children.clear();
+            for (Transform* childTransform : children)
+            {
+                if (childTransform && childTransform->owner)
+                {
+                    Destroy(childTransform->owner);
+                }
+            }
+        }
+
         auto it = std::find_if(
             gameObjects.begin(),
             gameObjects.end(),
