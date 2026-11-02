@@ -45,6 +45,7 @@ target_include_directories(Engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/external/glad/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/stb
     ${CMAKE_CURRENT_SOURCE_DIR}/external/miniaudio
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/pl_mpeg
 )
 
 # 6. Find system OpenGL natively
