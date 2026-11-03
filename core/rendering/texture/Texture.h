@@ -5,6 +5,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <stb_image.h>
 
+#include <algorithm>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -193,11 +194,95 @@ public:
     // Texture Sheet / Atlas Slicing (returns std::vector<Texture*>)
     // =========================================================================
 
-    // Slices a texture sheet / atlas into individual Texture* instances left-to-right, top-to-bottom.
-    // - size: pixel dimensions (width, height) of each tile (must be positive).
-    // - offset: pixel padding/offset between tiles (cannot be negative).
-    // - limit: -1 for no limit, otherwise caps the maximum number of textures created.
-    // - loadMode: NORMAL or MONOTONE (non-transparent pixels become pure white).
+    // Slices a texture sheet / atlas into individual Texture* instances left-to-right, top-to-bottom
+    // by dividing the image into the specified number of columns and rows.
+    static std::vector<Texture*> CreateTextureMap(
+        const std::string& path,
+        int columns,
+        int rows,
+        TextureLoadMode loadMode = TextureLoadMode::NORMAL,
+        TextureWrapMode wrap = TextureWrapMode::REPEAT,
+        TextureFilterMode filter = TextureFilterMode::LINEAR
+    )
+    {
+        std::vector<Texture*> textures;
+
+        if (columns <= 0 || rows <= 0)
+        {
+            std::cerr << "ERROR::TEXTURE::TEXTURE_MAP::INVALID_GRID: " << path
+                      << " (columns and rows must be positive)" << std::endl;
+            return textures;
+        }
+
+        stbi_set_flip_vertically_on_load(false);
+        int sheetWidth = 0, sheetHeight = 0, nrChannels = 0;
+        unsigned char* sheetData = stbi_load(path.c_str(), &sheetWidth, &sheetHeight, &nrChannels, 0);
+
+        if (!sheetData)
+        {
+            std::cerr << "ERROR::TEXTURE::TEXTURE_MAP::FILE_NOT_FOUND_OR_READ_FAILED: " << path << std::endl;
+            return textures;
+        }
+
+        const int tileWidth = sheetWidth / columns;
+        const int tileHeight = sheetHeight / rows;
+
+        if (tileWidth <= 0 || tileHeight <= 0)
+        {
+            std::cerr << "ERROR::TEXTURE::TEXTURE_MAP::TILE_SIZE_TOO_SMALL: " << path << std::endl;
+            stbi_image_free(sheetData);
+            return textures;
+        }
+
+        textures.reserve(static_cast<size_t>(columns * rows));
+        const size_t rowBytes = static_cast<size_t>(tileWidth) * static_cast<size_t>(nrChannels);
+        std::vector<unsigned char> tileBuffer(rowBytes * static_cast<size_t>(tileHeight));
+
+        for (int r = 0; r < rows; ++r)
+        {
+            for (int c = 0; c < columns; ++c)
+            {
+                const int startX = c * tileWidth;
+                const int startY = r * tileHeight;
+
+                for (int row = 0; row < tileHeight; ++row)
+                {
+                    // Vertical flip within each tile for OpenGL UV orientation
+                    const int srcY = startY + (tileHeight - 1 - row);
+                    const size_t srcOffset =
+                        (static_cast<size_t>(srcY) * static_cast<size_t>(sheetWidth) + static_cast<size_t>(startX)) *
+                        static_cast<size_t>(nrChannels);
+                    const size_t dstOffset = static_cast<size_t>(row) * rowBytes;
+
+                    std::memcpy(tileBuffer.data() + dstOffset, sheetData + srcOffset, rowBytes);
+                }
+
+                Texture* tex = new Texture(
+                    tileBuffer.data(),
+                    tileWidth,
+                    tileHeight,
+                    nrChannels,
+                    loadMode,
+                    wrap,
+                    filter
+                );
+
+                if (tex->IsValid())
+                {
+                    textures.push_back(tex);
+                }
+                else
+                {
+                    delete tex;
+                }
+            }
+        }
+
+        stbi_image_free(sheetData);
+        return textures;
+    }
+
+    // Overload for slicing by explicit pixel tile size, offset, and optional limit
     static std::vector<Texture*> CreateTextureMap(
         const std::string& path,
         glm::vec2 size,
@@ -237,9 +322,6 @@ public:
         const int offsetX = static_cast<int>(offset.x);
         const int offsetY = static_cast<int>(offset.y);
 
-        // Load unflipped so tile 0 starts at top-left (x = 0, y = 0) and advances
-        // left-to-right, top-to-bottom; each individual tile is flipped vertically
-        // before uploading to OpenGL so its UV orientation matches Texture(path).
         stbi_set_flip_vertically_on_load(false);
         int sheetWidth = 0, sheetHeight = 0, nrChannels = 0;
         unsigned char* sheetData = stbi_load(path.c_str(), &sheetWidth, &sheetHeight, &nrChannels, 0);
