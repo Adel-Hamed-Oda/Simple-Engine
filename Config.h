@@ -53,7 +53,9 @@ namespace CONFIG
     {
         constexpr const char* TITLE = "hello";
 
-        constexpr int WIDTH = 1000;
-        constexpr int HEIGHT = 1000;
+        constexpr int WIDTH = 1920;
+        constexpr int HEIGHT = 1080;
+
+        constexpr bool FULLSCREEN = true;
     }
 }

@@ -36,4 +36,29 @@ namespace PublicDomain
                 glfwSetInputMode(CurrentWindow->GetGLFWWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         }
     }
+
+    inline void ToggleFullscreen()
+    {
+        if (CurrentWindow)
+        {
+            CurrentWindow->ToggleFullscreen();
+        }
+    }
+
+    inline bool IsFullscreen()
+    {
+        if (CurrentWindow)
+        {
+            return CurrentWindow->IsFullscreen();
+        }
+        return false;
+    }
+
+    inline void SetFullscreen(bool fullscreen)
+    {
+        if (CurrentWindow)
+        {
+            CurrentWindow->SetFullscreen(fullscreen);
+        }
+    }
 }

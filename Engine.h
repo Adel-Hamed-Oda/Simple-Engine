@@ -62,7 +62,7 @@ private:
 
     static bool CreatePrimaryWindow()
     {
-		PublicDomain::CurrentWindow = new Window(CONFIG::WINDOW::WIDTH, CONFIG::WINDOW::HEIGHT, CONFIG::WINDOW::TITLE);
+		PublicDomain::CurrentWindow = new Window(CONFIG::WINDOW::WIDTH, CONFIG::WINDOW::HEIGHT, CONFIG::WINDOW::TITLE, CONFIG::WINDOW::FULLSCREEN);
         if (PublicDomain::CurrentWindow == nullptr)
         {
             glfwTerminate();
