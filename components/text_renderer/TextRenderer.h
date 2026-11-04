@@ -209,6 +209,19 @@ public:
     int GetZOrder() const { return zOrder; }
     void SetZOrder(int value) { zOrder = value; }
 
+    float CalculateLocalWidth(const std::string& str) const
+    {
+        float w = 0.0f;
+        const float unit = 1.0f / static_cast<float>(pixelSize);
+        for (char c : str)
+        {
+            auto it = glyphs.find(c);
+            if (it != glyphs.end())
+                w += static_cast<float>(it->second.advance >> 6) * unit;
+        }
+        return w;
+    }
+
 private:
     struct Character
     {

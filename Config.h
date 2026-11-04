@@ -56,6 +56,6 @@ namespace CONFIG
         constexpr int WIDTH = 1920;
         constexpr int HEIGHT = 1080;
 
-        constexpr bool FULLSCREEN = true;
+        constexpr bool FULLSCREEN = false;
     }
 }
