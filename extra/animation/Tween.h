@@ -43,6 +43,16 @@ public:
         );
     }
 
+    static void ClearAll()
+    {
+        auto copy = activeTweens;
+        activeTweens.clear();
+        for (Tween* t : copy)
+        {
+            delete t;
+        }
+    }
+
     static void UpdateAll()
     {
         for (size_t i = 0; i < activeTweens.size(); )

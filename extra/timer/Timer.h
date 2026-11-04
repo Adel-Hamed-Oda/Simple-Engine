@@ -57,6 +57,16 @@ public:
         );
     }
 
+    static void ClearAll()
+    {
+        auto copy = activeTimers;
+        activeTimers.clear();
+        for (Timer* t : copy)
+        {
+            delete t;
+        }
+    }
+
     static void UpdateAll()
     {
         for (size_t i = 0; i < activeTimers.size(); )
