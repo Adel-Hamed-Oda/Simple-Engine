@@ -184,10 +184,10 @@ private:
         const auto& lights = LightSource::allLights;
 
         const int maxLights =
-            std::max(0, CONFIG::LIGHTING::MAX_LIGHTS);
+            (std::max)(0, CONFIG::LIGHTING::MAX_LIGHTS);
 
         const int lightCount = static_cast<int>(
-            std::min(lights.size(),
+            (std::min)(lights.size(),
                      static_cast<std::size_t>(maxLights)));
 
         shader->setInt("numLights", lightCount);

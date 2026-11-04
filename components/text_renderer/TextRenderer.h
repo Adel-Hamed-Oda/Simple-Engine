@@ -111,10 +111,10 @@ public:
 
                 if (w > 0.0f && h > 0.0f)
                 {
-                    minX = std::min(minX, xpos);
-                    maxX = std::max(maxX, xpos + w);
-                    minY = std::min(minY, ypos);
-                    maxY = std::max(maxY, ypos + h);
+                    minX = (std::min)(minX, xpos);
+                    maxX = (std::max)(maxX, xpos + w);
+                    minY = (std::min)(minY, ypos);
+                    maxY = (std::max)(maxY, ypos + h);
                     hasVisibleGlyph = true;
                 }
 
@@ -124,8 +124,8 @@ public:
             if (!hasVisibleGlyph)
                 return;
 
-            minX = std::min(minX, 0.0f);
-            maxX = std::max(maxX, advanceX);
+            minX = (std::min)(minX, 0.0f);
+            maxX = (std::max)(maxX, advanceX);
 
             const float textWidth = maxX - minX;
             const float textHeight = maxY - minY;
