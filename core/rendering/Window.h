@@ -8,7 +8,7 @@
 class Window
 {
 public:
-	// monitor and share should be added later
+	// monitor and share should be added later but I am too lazy for this
 	Window(int width, int height, const char* title, bool fullscreen = false)
 	{
 		m_windowedWidth = width;
@@ -52,6 +52,7 @@ public:
 		Close();
 	}
 
+	// please do not use if you don't know what you are doing
 	GLFWwindow* GetGLFWWindow() const
 	{
 		return m_window;
@@ -72,7 +73,6 @@ public:
 	{
 		return std::string(glfwGetWindowTitle(m_window));
 	}
-
 	bool IsFullscreen() const
 	{
 		return m_isFullscreen;
@@ -93,7 +93,6 @@ public:
 	{
 		glfwSetWindowTitle(m_window, title.c_str());
 	}
-
 	void SetFullscreen(bool fullscreen)
 	{
 		if (m_isFullscreen == fullscreen || !m_window)
@@ -136,11 +135,6 @@ public:
 		}
 	}
 
-	void ToggleFullscreen()
-	{
-		SetFullscreen(!m_isFullscreen);
-	}
-
 	void Close()
 	{
 		if (m_window)
@@ -153,8 +147,8 @@ public:
 private:
 	GLFWwindow* m_window = nullptr;
 	bool m_isFullscreen = false;
-	int m_windowedX = 100;
-	int m_windowedY = 100;
+	int m_windowedX = 0;
+	int m_windowedY = 0;
 	int m_windowedWidth = 1920;
 	int m_windowedHeight = 1080;
 };
