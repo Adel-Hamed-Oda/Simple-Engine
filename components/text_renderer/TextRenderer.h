@@ -26,6 +26,12 @@
 class TextRenderer : public Component
 {
 public:
+    // Local size multiplier relative to owner Transform's scale (1.0 matches full quad bounds)
+    glm::vec2 size{ 1.0f, 1.0f };
+
+    // Local offset relative to owner Transform's center in screen-space
+    glm::vec2 offset{ 0.0f, 0.0f };
+
     TextRenderer(
         std::string text,
         std::string fontPath,
@@ -81,7 +87,7 @@ public:
             return;
         material->ApplyMaterial();
 
-        const float unit = 1.0f / static_cast<float>(pixelSize);   // glyph pixels -> local units
+        const float unit = 1.0f / static_cast<float>(rasterPixelSize);   // glyph pixels -> local units
 
         float centerX = 0.0f;
         float centerY = 0.0f;
@@ -169,10 +175,10 @@ public:
             const float w = g.size.x * unit;
             const float h = g.size.y * unit;
 
-            const float x0 = screenSpace ? ((xpos - centerX) * invWidth) : xpos;
-            const float x1 = screenSpace ? ((xpos + w - centerX) * invWidth) : (xpos + w);
-            const float y0 = screenSpace ? ((ypos - centerY) * invHeight) : ypos;
-            const float y1 = screenSpace ? ((ypos + h - centerY) * invHeight) : (ypos + h);
+            const float x0 = screenSpace ? (((xpos - centerX) * invWidth) * size.x + offset.x) : xpos;
+            const float x1 = screenSpace ? (((xpos + w - centerX) * invWidth) * size.x + offset.x) : (xpos + w);
+            const float y0 = screenSpace ? (((ypos - centerY) * invHeight) * size.y + offset.y) : ypos;
+            const float y1 = screenSpace ? (((ypos + h - centerY) * invHeight) * size.y + offset.y) : (ypos + h);
 
             // World space is y-up. The bitmap's  first row is the TOP of the glyph,
             // so the top edge uses v = 0. Counter-clockwise when viewed from +Z.
@@ -212,7 +218,7 @@ public:
     float CalculateLocalWidth(const std::string& str) const
     {
         float w = 0.0f;
-        const float unit = 1.0f / static_cast<float>(pixelSize);
+        const float unit = 1.0f / static_cast<float>(rasterPixelSize);
         for (char c : str)
         {
             auto it = glyphs.find(c);
@@ -234,6 +240,7 @@ private:
     std::string text;
     std::string fontPath;
     unsigned int pixelSize;
+    unsigned int rasterPixelSize = 128;
     TextMaterial* material = nullptr;
     int zOrder = 0;
 
@@ -243,6 +250,8 @@ private:
 
     void Initialize()
     {
+        rasterPixelSize = (pixelSize < 128) ? 128 : pixelSize;
+
         FT_Library library = nullptr;
         FT_Face face = nullptr;
         if (FT_Init_FreeType(&library) != 0 ||
@@ -254,7 +263,7 @@ private:
             return;
         }
 
-        FT_Set_Pixel_Sizes(face, 0, pixelSize);
+        FT_Set_Pixel_Sizes(face, 0, rasterPixelSize);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         for (unsigned char character = 32; character < 128; ++character)
@@ -271,7 +280,8 @@ private:
                 0, GL_RED, GL_UNSIGNED_BYTE, face->glyph->bitmap.buffer);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glGenerateMipmap(GL_TEXTURE_2D);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
             glyphs.emplace(
