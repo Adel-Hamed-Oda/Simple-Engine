@@ -12,6 +12,7 @@
 #include "mesh_renderer/MeshRenderer.h"
 #include "mesh_renderer/ModelLoader.h"
 #include "text_renderer/TextRenderer.h"
+#include "text_renderer/ScreenTextRenderer.h"
 
 #include "physics/BoxCollider.h"
 #include "physics/Collider.h"

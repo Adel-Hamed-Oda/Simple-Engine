@@ -10,6 +10,7 @@
 #include "../../components/image_renderer/ImageRenderer.h"
 #include "../../components/mesh_renderer/MeshRenderer.h"
 #include "../../components/text_renderer/TextRenderer.h"
+#include "../../components/text_renderer/ScreenTextRenderer.h"
 #include "../../components/light_source/LightSource.h"
 
 #include "../gameobject/GameObject.h"
@@ -108,12 +109,12 @@ public:
 
 			for (TextRenderer* textRenderer : obj->GetComponents<TextRenderer>())
 			{
-				if (textRenderer->IsScreenSpace())
+				if (const ScreenTextRenderer* screenTextRenderer = dynamic_cast<const ScreenTextRenderer*>(textRenderer))
 				{
 					deferredScreenDrawItems.push_back(ScreenDrawItem{
-						textRenderer->GetZOrder(),
+						screenTextRenderer->GetZOrder(),
 						nullptr,
-						textRenderer
+						screenTextRenderer
 					});
 				}
 				else
@@ -158,18 +159,19 @@ public:
 	}
 
 private:
+    // This is the stupidest shit ever but I am tired
     struct ScreenDrawItem
     {
         int zOrder = 0;
         const ImageRenderer* imageRenderer = nullptr;
-        const TextRenderer* textRenderer = nullptr;
+        const ScreenTextRenderer* screenTextRenderer = nullptr;
 
         void Render() const
         {
             if (imageRenderer)
                 imageRenderer->Render();
-            else if (textRenderer)
-                textRenderer->Render();
+            else if (screenTextRenderer)
+                screenTextRenderer->Render();
         }
     };
 

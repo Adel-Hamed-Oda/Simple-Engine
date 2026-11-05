@@ -11,36 +11,35 @@
 #include <iostream>
 #include <limits>
 #include <map>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "../Component.h"
 #include "../../core/rendering/material/TextMaterial.h"
+#include "../../core/transform/Transform.h"
 
-// Base text renderer:
-// - In World Space (WorldTextRenderer): the string is laid out in the object's local XY plane,
-//   facing +Z, with the baseline at y = 0 and the first glyph starting at x = 0.
-//   One em (the font's pixelSize) equals one world unit at Transform scale 1.
-// - In Screen Space (ScreenTextRenderer): the string's bounding box is normalized to [-0.5, +0.5]
-//   horizontally and vertically, so Position (0, 0, 0) is exact screen center, (0.5, 0.5, 0) is
-//   top-right, Scale (1, 1, 1) is full screen size, and Scale (0.5, 0.5, 1) is half screen width/height.
+// World-Space Text Renderer:
+// The string is laid out in the object's local XY plane, facing +Z,
+// with the baseline at y = 0 and the first glyph starting at x = 0.
+// One em (the font's pixelSize) equals one world unit at Transform scale 1.
+// Affected by camera view & projection and depth testing.
 class TextRenderer : public Component
 {
 public:
-    // Local size multiplier relative to owner Transform's scale (1.0 matches full quad bounds)
-    glm::vec2 size{ 1.0f, 1.0f };
-
-    // Local offset relative to owner Transform's center in screen-space
-    glm::vec2 offset{ 0.0f, 0.0f };
+    std::string text;
+    std::string fontPath;
+    unsigned int pixelSize = 48;
+    unsigned int rasterPixelSize = 128;
+    TextMaterial* material = nullptr;
+    int zOrder = 0;
 
     TextRenderer(
         std::string text,
         std::string fontPath,
         unsigned int pixelSize,
         TextMaterial* material,
-        int zOrder = 0
+        int zOrder
     )
         : text(std::move(text)),
           fontPath(std::move(fontPath)),
@@ -53,11 +52,30 @@ public:
 
     TextRenderer(
         std::string text,
+        std::string fontPath,
+        unsigned int pixelSize,
+        TextMaterial* material
+    )
+        : TextRenderer(std::move(text), std::move(fontPath), pixelSize, material, 0)
+    {
+    }
+
+    TextRenderer(
+        std::string text,
         unsigned int pixelSize,
         TextMaterial* material,
-        int zOrder = 0
+        int zOrder
     )
         : TextRenderer(std::move(text), "", pixelSize, material, zOrder)
+    {
+    }
+
+    TextRenderer(
+        std::string text,
+        unsigned int pixelSize,
+        TextMaterial* material
+    )
+        : TextRenderer(std::move(text), "", pixelSize, material, 0)
     {
     }
 
@@ -73,8 +91,6 @@ public:
 
     TextRenderer(const TextRenderer&) = delete;
     TextRenderer& operator=(const TextRenderer&) = delete;
-
-    virtual bool IsScreenSpace() const { return false; }
 
     void SetText(const std::string& value) { text = value; }
     const std::string& GetText() const { return text; }
@@ -95,79 +111,34 @@ public:
     TextMaterial* GetMaterial() const { return material; }
     void SetMaterial(TextMaterial* value) { material = value; }
 
-    void Render() const
+    int GetZOrder() const { return zOrder; }
+    void SetZOrder(int value) { zOrder = value; }
+
+    float CalculateLocalWidth(const std::string& str) const
+    {
+        float w = 0.0f;
+        const float unit = 1.0f / static_cast<float>(rasterPixelSize);
+        for (char c : str)
+        {
+            auto it = glyphs.find(c);
+            if (it != glyphs.end())
+                w += static_cast<float>(it->second.advance >> 6) * unit;
+        }
+        return w;
+    }
+
+    virtual void Render() const
     {
         if (VAO == 0 || glyphs.empty() || !transform || !material || text.empty())
             return;
 
-        const bool screenSpace = IsScreenSpace();
-
         // World-space text uses the main camera's view/projection.
-        // Screen-space text uses an identity view and screen orthographic projection.
-        const bool uniformsReady = screenSpace
-            ? material->SetupScreenSpaceUniforms(transform)
-            : material->SetupCoreUniforms(transform);
-
-        if (!uniformsReady)
+        if (!material->SetupCoreUniforms(transform))
             return;
+
         material->ApplyMaterial();
 
         const float unit = 1.0f / static_cast<float>(rasterPixelSize);   // glyph pixels -> local units
-
-        float centerX = 0.0f;
-        float centerY = 0.0f;
-        float invWidth = 1.0f;
-        float invHeight = 1.0f;
-
-        if (screenSpace)
-        {
-            float minX = std::numeric_limits<float>::max();
-            float maxX = std::numeric_limits<float>::lowest();
-            float minY = std::numeric_limits<float>::max();
-            float maxY = std::numeric_limits<float>::lowest();
-            bool hasVisibleGlyph = false;
-            float advanceX = 0.0f;
-
-            for (const char character : text)
-            {
-                const auto glyph = glyphs.find(character);
-                if (glyph == glyphs.end())
-                    continue;
-
-                const Character& g = glyph->second;
-                const float xpos = advanceX + g.bearing.x * unit;
-                const float ypos = (g.bearing.y - g.size.y) * unit;
-                const float w = g.size.x * unit;
-                const float h = g.size.y * unit;
-
-                if (w > 0.0f && h > 0.0f)
-                {
-                    minX = (std::min)(minX, xpos);
-                    maxX = (std::max)(maxX, xpos + w);
-                    minY = (std::min)(minY, ypos);
-                    maxY = (std::max)(maxY, ypos + h);
-                    hasVisibleGlyph = true;
-                }
-
-                advanceX += static_cast<float>(g.advance >> 6) * unit;
-            }
-
-            if (!hasVisibleGlyph)
-                return;
-
-            minX = (std::min)(minX, 0.0f);
-            maxX = (std::max)(maxX, advanceX);
-
-            const float textWidth = maxX - minX;
-            const float textHeight = maxY - minY;
-            if (textWidth <= 0.0f || textHeight <= 0.0f)
-                return;
-
-            centerX = (minX + maxX) * 0.5f;
-            centerY = (minY + maxY) * 0.5f;
-            invWidth = 1.0f / textWidth;
-            invHeight = 1.0f / textHeight;
-        }
 
         const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
         const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
@@ -178,8 +149,6 @@ public:
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(GL_FALSE);
-        if (screenSpace)
-            glDisable(GL_DEPTH_TEST);
         if (material->doubleSided)
             glDisable(GL_CULL_FACE);
 
@@ -200,22 +169,17 @@ public:
             const float w = g.size.x * unit;
             const float h = g.size.y * unit;
 
-            const float x0 = screenSpace ? (((xpos - centerX) * invWidth) * size.x + offset.x) : xpos;
-            const float x1 = screenSpace ? (((xpos + w - centerX) * invWidth) * size.x + offset.x) : (xpos + w);
-            const float y0 = screenSpace ? (((ypos - centerY) * invHeight) * size.y + offset.y) : ypos;
-            const float y1 = screenSpace ? (((ypos + h - centerY) * invHeight) * size.y + offset.y) : (ypos + h);
-
             // World space is y-up. The bitmap's first row is the TOP of the glyph,
             // so the top edge uses v = 0. Counter-clockwise when viewed from +Z.
             // Layout per vertex: { position.x, position.y, position.z, uv.x, uv.y }
             const float vertices[6][5] = {
-                { x0, y0, 0.0f, 0.0f, 1.0f },  // bottom-left
-                { x1, y0, 0.0f, 1.0f, 1.0f },  // bottom-right
-                { x1, y1, 0.0f, 1.0f, 0.0f },  // top-right
+                { xpos,     ypos,     0.0f, 0.0f, 1.0f },  // bottom-left
+                { xpos + w, ypos,     0.0f, 1.0f, 1.0f },  // bottom-right
+                { xpos + w, ypos + h, 0.0f, 1.0f, 0.0f },  // top-right
 
-                { x0, y0, 0.0f, 0.0f, 1.0f },  // bottom-left
-                { x1, y1, 0.0f, 1.0f, 0.0f },  // top-right
-                { x0, y1, 0.0f, 0.0f, 0.0f }   // top-left
+                { xpos,     ypos,     0.0f, 0.0f, 1.0f },  // bottom-left
+                { xpos + w, ypos + h, 0.0f, 1.0f, 0.0f },  // top-right
+                { xpos,     ypos + h, 0.0f, 0.0f, 0.0f }   // top-left
             };
 
             glBindTexture(GL_TEXTURE_2D, g.textureID);
@@ -237,23 +201,7 @@ public:
         if (!blendEnabled) glDisable(GL_BLEND);
     }
 
-    int GetZOrder() const { return zOrder; }
-    void SetZOrder(int value) { zOrder = value; }
-
-    float CalculateLocalWidth(const std::string& str) const
-    {
-        float w = 0.0f;
-        const float unit = 1.0f / static_cast<float>(rasterPixelSize);
-        for (char c : str)
-        {
-            auto it = glyphs.find(c);
-            if (it != glyphs.end())
-                w += static_cast<float>(it->second.advance >> 6) * unit;
-        }
-        return w;
-    }
-
-private:
+protected:
     struct Character
     {
         GLuint textureID = 0;
@@ -261,13 +209,6 @@ private:
         glm::ivec2 bearing = glm::ivec2(0);
         long advance = 0;
     };
-
-    std::string text;
-    std::string fontPath;
-    unsigned int pixelSize;
-    unsigned int rasterPixelSize = 128;
-    TextMaterial* material = nullptr;
-    int zOrder = 0;
 
     std::map<char, Character> glyphs;
     GLuint VAO = 0;
@@ -346,10 +287,6 @@ private:
 
         if (VAO == 0)
         {
-            // Vertex attribute locations match the regular mesh layout so text shaders can be
-            // written like any other shader:
-            //   layout (location = 0) in vec3 aPos;
-            //   layout (location = 3) in vec2 aUV;
             constexpr GLuint POSITION_LOCATION = 0;
             constexpr GLuint UV_LOCATION = 3;
             constexpr GLsizei STRIDE = 5 * sizeof(float);
@@ -373,16 +310,8 @@ private:
     }
 };
 
-class WorldTextRenderer : public TextRenderer
-{
-public:
-    using TextRenderer::TextRenderer;
-    bool IsScreenSpace() const override { return false; }
-};
+// Backwards-compatibility alias: WorldTextRenderer is now called TextRenderer
+using WorldTextRenderer = TextRenderer;
 
-class ScreenTextRenderer : public TextRenderer
-{
-public:
-    using TextRenderer::TextRenderer;
-    bool IsScreenSpace() const override { return true; }
-};
+// ScreenTextRenderer is defined in its own header
+#include "ScreenTextRenderer.h"
