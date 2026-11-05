@@ -7,11 +7,14 @@
 #include FT_FREETYPE_H
 
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "../Component.h"
 #include "../../core/rendering/material/TextMaterial.h"
@@ -48,10 +51,19 @@ public:
         Initialize();
     }
 
+    TextRenderer(
+        std::string text,
+        unsigned int pixelSize,
+        TextMaterial* material,
+        int zOrder = 0
+    )
+        : TextRenderer(std::move(text), "", pixelSize, material, zOrder)
+    {
+    }
+
     ~TextRenderer() override
     {
-        for (const auto& [character, glyph] : glyphs)
-            glDeleteTextures(1, &glyph.textureID);
+        CleanupGlyphs();
 
         if (VAO != 0)
             glDeleteVertexArrays(1, &VAO);
@@ -66,6 +78,19 @@ public:
 
     void SetText(const std::string& value) { text = value; }
     const std::string& GetText() const { return text; }
+
+    const std::string& GetFontPath() const { return fontPath; }
+
+    bool SetFont(const std::string& newFontPath, unsigned int newPixelSize = 0)
+    {
+        if (newPixelSize > 0)
+            pixelSize = newPixelSize;
+
+        fontPath = newFontPath;
+        CleanupGlyphs();
+        Initialize();
+        return !glyphs.empty();
+    }
 
     TextMaterial* GetMaterial() const { return material; }
     void SetMaterial(TextMaterial* value) { material = value; }
@@ -180,7 +205,7 @@ public:
             const float y0 = screenSpace ? (((ypos - centerY) * invHeight) * size.y + offset.y) : ypos;
             const float y1 = screenSpace ? (((ypos + h - centerY) * invHeight) * size.y + offset.y) : (ypos + h);
 
-            // World space is y-up. The bitmap's  first row is the TOP of the glyph,
+            // World space is y-up. The bitmap's first row is the TOP of the glyph,
             // so the top edge uses v = 0. Counter-clockwise when viewed from +Z.
             // Layout per vertex: { position.x, position.y, position.z, uv.x, uv.y }
             const float vertices[6][5] = {
@@ -248,18 +273,38 @@ private:
     GLuint VAO = 0;
     GLuint VBO = 0;
 
+    void CleanupGlyphs()
+    {
+        for (const auto& [character, glyph] : glyphs)
+        {
+            if (glyph.textureID != 0)
+                glDeleteTextures(1, &glyph.textureID);
+        }
+        glyphs.clear();
+    }
+
     void Initialize()
     {
         rasterPixelSize = (pixelSize < 128) ? 128 : pixelSize;
 
+        if (fontPath.empty())
+        {
+            std::cerr << "ERROR::TEXT_RENDERER::FONT_PATH_EMPTY: No font path specified." << std::endl;
+            return;
+        }
+
         FT_Library library = nullptr;
+        if (FT_Init_FreeType(&library) != 0)
+        {
+            std::cerr << "ERROR::TEXT_RENDERER::FREETYPE_INIT_FAILED" << std::endl;
+            return;
+        }
+
         FT_Face face = nullptr;
-        if (FT_Init_FreeType(&library) != 0 ||
-            FT_New_Face(library, fontPath.c_str(), 0, &face) != 0)
+        if (FT_New_Face(library, fontPath.c_str(), 0, &face) != 0)
         {
             std::cerr << "ERROR::TEXT_RENDERER::FONT_LOAD_FAILED: " << fontPath << std::endl;
-            if (library)
-                FT_Done_FreeType(library);
+            FT_Done_FreeType(library);
             return;
         }
 
@@ -299,33 +344,35 @@ private:
         glBindTexture(GL_TEXTURE_2D, 0);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 
-        // Vertex attribute locations match the regular mesh layout so text shaders can be
-        // written like any other shader:
-        //   layout (location = 0) in vec3 aPos;
-        //   layout (location = 3) in vec2 aUV;
-        constexpr GLuint POSITION_LOCATION = 0;
-        constexpr GLuint UV_LOCATION = 3;
-        constexpr GLsizei STRIDE = 5 * sizeof(float);
+        if (VAO == 0)
+        {
+            // Vertex attribute locations match the regular mesh layout so text shaders can be
+            // written like any other shader:
+            //   layout (location = 0) in vec3 aPos;
+            //   layout (location = 3) in vec2 aUV;
+            constexpr GLuint POSITION_LOCATION = 0;
+            constexpr GLuint UV_LOCATION = 3;
+            constexpr GLsizei STRIDE = 5 * sizeof(float);
 
-        const float vertices[6][5] = {};
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &VBO);
-        glBindVertexArray(VAO);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+            const float vertices[6][5] = {};
+            glGenVertexArrays(1, &VAO);
+            glGenBuffers(1, &VBO);
+            glBindVertexArray(VAO);
+            glBindBuffer(GL_ARRAY_BUFFER, VBO);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
 
-        glEnableVertexAttribArray(POSITION_LOCATION);
-        glVertexAttribPointer(POSITION_LOCATION, 3, GL_FLOAT, GL_FALSE, STRIDE, nullptr);
+            glEnableVertexAttribArray(POSITION_LOCATION);
+            glVertexAttribPointer(POSITION_LOCATION, 3, GL_FLOAT, GL_FALSE, STRIDE, nullptr);
 
-        glEnableVertexAttribArray(UV_LOCATION);
-        glVertexAttribPointer(UV_LOCATION, 2, GL_FLOAT, GL_FALSE, STRIDE, reinterpret_cast<void*>(3 * sizeof(float)));
+            glEnableVertexAttribArray(UV_LOCATION);
+            glVertexAttribPointer(UV_LOCATION, 2, GL_FLOAT, GL_FALSE, STRIDE, reinterpret_cast<void*>(3 * sizeof(float)));
 
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindVertexArray(0);
+        }
     }
 };
 
-// Explicit World-Space Text Renderer (affected by camera view/projection and depth test).
 class WorldTextRenderer : public TextRenderer
 {
 public:
@@ -333,9 +380,6 @@ public:
     bool IsScreenSpace() const override { return false; }
 };
 
-// Screen-Space Text Renderer (HUD, menus, subtitles; ignores camera view/projection and depth testing).
-// Normalized to [-0.5, +0.5] so Position (0, 0, 0) is center, (0.5, 0.5, 0) is top-right,
-// and Scale (1, 1, 1) is full screen width & height.
 class ScreenTextRenderer : public TextRenderer
 {
 public:
