@@ -43,7 +43,12 @@ public:
             return true;
         }
 
-        return ExecuteSceneChange(name);
+        const bool loaded = ExecuteSceneChange(name);
+        if (loaded && !pendingSceneName.empty())
+        {
+            ProcessPendingSceneLoad();
+        }
+        return loaded;
     }
 
     static bool LoadScene(const int index)
