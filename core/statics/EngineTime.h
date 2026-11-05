@@ -12,11 +12,23 @@ public:
     inline static float immediateFPS = 0.0f;
     inline static float timeScale = 1.0f;
 
+    static void SyncClock(float* lastFrameTime, float currentTime)
+    {
+        if (lastFrameTime)
+        {
+            *lastFrameTime = currentTime;
+        }
+        Time::deltaTime = 0.0f;
+    }
+
     static void Update(float* lastFrameTime, float currentTime)
     {
-        float currentFrameTime = static_cast<float>(currentTime);
+        const float currentFrameTime = static_cast<float>(currentTime);
+        const float unscaledDelta = (currentFrameTime > *lastFrameTime)
+            ? (currentFrameTime - *lastFrameTime)
+            : 0.0f;
         Time::frames++;
-        Time::deltaTime = (currentFrameTime - *lastFrameTime) * Time::timeScale;
+        Time::deltaTime = unscaledDelta * Time::timeScale;
         *lastFrameTime = currentFrameTime;
         Time::time += Time::deltaTime;
         if (Time::deltaTime > 0.0f)
@@ -31,10 +43,10 @@ public:
             deltaSum -= deltaBuffer.front();
             deltaBuffer.erase(deltaBuffer.begin());
         }
-        deltaBuffer.push_back(Time::deltaTime / Time::timeScale);
-        deltaSum += Time::deltaTime / Time::timeScale;
+        deltaBuffer.push_back(unscaledDelta);
+        deltaSum += unscaledDelta;
 
-        if (Time::frames % 60 == 0)
-            Time::FPS = (deltaBuffer.size() / deltaSum);
+        if (Time::frames % 60 == 0 && deltaSum > 0.0f)
+            Time::FPS = (static_cast<float>(deltaBuffer.size()) / deltaSum);
     }
 };

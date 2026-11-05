@@ -21,6 +21,7 @@ namespace CONFIG
 
         constexpr bool LOAD_FIRST_SCENE = true;
         constexpr bool ENABLE_DEBUG = true;
+        constexpr bool PAUSE_ON_SCENE_LOAD = true;
     }
 
     namespace RENDERING

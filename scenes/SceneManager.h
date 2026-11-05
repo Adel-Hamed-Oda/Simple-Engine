@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <functional>
 
+#include "../Config.h"
+#include "../core/audio/AudioSource.h"
 #include "Scene.h"
 #include "../extra/animation/Tween.h"
 #include "../extra/timer/Timer.h"
@@ -12,6 +14,7 @@
 class SceneManager
 {
 public:
+    inline static bool pauseOnSceneLoad = CONFIG::ENGINE::PAUSE_ON_SCENE_LOAD;
 
     template<typename T>
     static void RegisterScene(const std::string& name)
@@ -31,11 +34,10 @@ public:
             return false;
         }
 
-        // If called while a scene is currently running its Update(), defer the
-        // scene transition to the end of the update pass. This prevents deleting
-        // the active Scene and its GameObjects while their code is still executing
-        // on the call stack (preventing read access violations and dangling pointers).
-        if (isUpdating)
+        // If called while a frame update or scene load is active, defer the
+        // scene transition so active scenes, colliders, tweens, and timers are
+        // never destroyed while their code is still executing on the call stack.
+        if (isUpdating || isLoading)
         {
             pendingSceneName = name;
             return true;
@@ -59,41 +61,61 @@ public:
         if (!currentScene)
             return;
 
-        // Clear all active tweens and timers before unloading objects
-        // so no callbacks or value-lerp writes target freed transforms or entities.
+        // Clear all active tweens, timers, and playing sounds before unloading
+        // objects so no callbacks, lerps, or looping tracks persist across scenes.
         Tween::ClearAll();
         Timer::ClearAll();
+        AudioSource::StopAll();
 
         currentScene->Unload();
         currentScene.reset();
     }
 
-    static void Update()
+    static void ProcessPendingSceneLoad()
     {
-        if (!pendingSceneName.empty())
+        int redirects = 0;
+        while (!pendingSceneName.empty() && redirects < 8)
         {
             std::string target = pendingSceneName;
             pendingSceneName.clear();
             ExecuteSceneChange(target);
+            ++redirects;
+        }
+    }
+
+    static void Update()
+    {
+        if (pauseOnSceneLoad && !pendingSceneName.empty())
+        {
+            return;
+        }
+
+        if (!pendingSceneName.empty())
+        {
+            ProcessPendingSceneLoad();
         }
 
         if (currentScene)
         {
+            const bool wasUpdating = isUpdating;
             isUpdating = true;
             currentScene->Update();
-            isUpdating = false;
+            isUpdating = wasUpdating;
         }
 
-        if (!pendingSceneName.empty())
+        if (!pauseOnSceneLoad && !pendingSceneName.empty())
         {
-            std::string target = pendingSceneName;
-            pendingSceneName.clear();
-            ExecuteSceneChange(target);
+            ProcessPendingSceneLoad();
         }
     }
 
     static Scene* GetCurrentScene() { return currentScene.get(); }
     static bool HasScene(const std::string& name) { return scenes.contains(name); }
+    static bool IsLoading() { return isLoading; }
+    static bool HasPendingSceneLoad() { return !pendingSceneName.empty(); }
+    static bool HasSceneJustLoaded() { return sceneJustLoaded; }
+    static void ConsumeSceneJustLoaded() { sceneJustLoaded = false; }
+    static void SetDeferSceneLoads(bool defer) { isUpdating = defer; }
 
 private:
     static bool ExecuteSceneChange(const std::string& name)
@@ -104,21 +126,29 @@ private:
             return false;
         }
 
+        isLoading = true;
+
         UnloadScene();
 
         currentScene = it->second();
         if (!currentScene)
         {
+            isLoading = false;
             return false;
         }
 
         currentScene->Setup();
         currentScene->Start();
 
+        isLoading = false;
+        sceneJustLoaded = true;
+
         return true;
     }
 
     inline static bool isUpdating = false;
+    inline static bool isLoading = false;
+    inline static bool sceneJustLoaded = false;
     inline static std::string pendingSceneName = "";
 
     inline static std::unique_ptr<Scene> currentScene = nullptr;

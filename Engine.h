@@ -98,9 +98,44 @@ private:
 
     static bool MainLoop()
     {
+        float lastFrameTime = SceneManager::pauseOnSceneLoad
+            ? static_cast<float>(glfwGetTime())
+            : 0.0f;
+
         while (!glfwWindowShouldClose(PublicDomain::CurrentWindow->GetGLFWWindow()) && !terminated)
         {
             glfwPollEvents();
+
+            if (SceneManager::pauseOnSceneLoad &&
+                (SceneManager::HasPendingSceneLoad() || SceneManager::HasSceneJustLoaded()))
+            {
+                SceneManager::ProcessPendingSceneLoad();
+                SceneManager::ConsumeSceneJustLoaded();
+
+                glClearColor(
+                    PublicDomain::Lighting::BackgroundColor.r,
+                    PublicDomain::Lighting::BackgroundColor.g,
+                    PublicDomain::Lighting::BackgroundColor.b,
+                    PublicDomain::Lighting::BackgroundColor.a
+                );
+                glClear(
+                    GL_COLOR_BUFFER_BIT |
+                    GL_DEPTH_BUFFER_BIT
+                );
+
+                Scene* loadedScene = SceneManager::GetCurrentScene();
+                if (loadedScene)
+                {
+                    Rendering::RenderScene(loadedScene);
+                }
+
+                glfwSwapBuffers(PublicDomain::CurrentWindow->GetGLFWWindow());
+                glfwPollEvents();
+                Input::Update();
+                Input::EndFrame();
+                Time::SyncClock(&lastFrameTime, static_cast<float>(glfwGetTime()));
+                continue;
+            }
 
             glClearColor(
                 PublicDomain::Lighting::BackgroundColor.r,
@@ -114,14 +149,18 @@ private:
                 GL_DEPTH_BUFFER_BIT
             );
 
-
-            static float lastFrameTime = 0.0f;
             Time::Update(&lastFrameTime, static_cast<float>(glfwGetTime()));
             Input::Update();
+
+            SceneManager::SetDeferSceneLoads(true);
             Physics::Update();
             SceneManager::Update();
-            Tween::UpdateAll();
-            Timer::UpdateAll();
+            if (!(SceneManager::pauseOnSceneLoad && SceneManager::HasPendingSceneLoad()))
+            {
+                Tween::UpdateAll();
+                Timer::UpdateAll();
+            }
+            SceneManager::SetDeferSceneLoads(false);
 
             Scene* scene = SceneManager::GetCurrentScene();
             if (scene)
