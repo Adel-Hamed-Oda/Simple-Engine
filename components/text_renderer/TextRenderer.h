@@ -40,7 +40,7 @@ public:
     unsigned int rasterPixelSize = 128;
     TextMaterial* material = nullptr;
     int zOrder = 0;
-    TextAlignment alignment = TextAlignment::Left;
+    TextAlignment alignment = TextAlignment::Center;
 
     TextRenderer(
         std::string text,
@@ -48,7 +48,7 @@ public:
         unsigned int pixelSize,
         TextMaterial* material,
         int zOrder,
-        TextAlignment alignment = TextAlignment::Left
+        TextAlignment alignment = TextAlignment::Center
     )
         : text(std::move(text)),
           fontPath(std::move(fontPath)),
@@ -65,7 +65,7 @@ public:
         std::string fontPath,
         unsigned int pixelSize,
         TextMaterial* material,
-        TextAlignment alignment = TextAlignment::Left
+        TextAlignment alignment = TextAlignment::Center
     )
         : TextRenderer(std::move(text), std::move(fontPath), pixelSize, material, 0, alignment)
     {
@@ -76,7 +76,7 @@ public:
         unsigned int pixelSize,
         TextMaterial* material,
         int zOrder,
-        TextAlignment alignment = TextAlignment::Left
+        TextAlignment alignment = TextAlignment::Center
     )
         : TextRenderer(std::move(text), "", pixelSize, material, zOrder, alignment)
     {
@@ -86,7 +86,7 @@ public:
         std::string text,
         unsigned int pixelSize,
         TextMaterial* material,
-        TextAlignment alignment = TextAlignment::Left
+        TextAlignment alignment = TextAlignment::Center
     )
         : TextRenderer(std::move(text), "", pixelSize, material, 0, alignment)
     {
