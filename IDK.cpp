@@ -1,3 +1,7 @@
+// I called this IDK.cpp because I GENUINELY don't know anything about what it does
+// All I know is that these specific set of lines are required for most of the external
+// libraries to work, like why bro what did I do
+
 #define GLAD_GL_IMPLEMENTATION
 #include <glad/gl.h>
 #define NOMINMAX
