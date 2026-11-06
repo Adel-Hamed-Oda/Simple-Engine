@@ -28,9 +28,10 @@ public:
         std::string fontPath,
         unsigned int pixelSize,
         TextMaterial* material,
-        int zOrder
+        int zOrder,
+        TextAlignment alignment = TextAlignment::Center
     )
-        : TextRenderer(std::move(text), std::move(fontPath), pixelSize, material, zOrder)
+        : TextRenderer(std::move(text), std::move(fontPath), pixelSize, material, zOrder, alignment)
     {
     }
 
@@ -38,9 +39,10 @@ public:
         std::string text,
         std::string fontPath,
         unsigned int pixelSize,
-        TextMaterial* material
+        TextMaterial* material,
+        TextAlignment alignment = TextAlignment::Center
     )
-        : TextRenderer(std::move(text), std::move(fontPath), pixelSize, material, 0)
+        : TextRenderer(std::move(text), std::move(fontPath), pixelSize, material, 0, alignment)
     {
     }
 
@@ -48,18 +50,20 @@ public:
         std::string text,
         unsigned int pixelSize,
         TextMaterial* material,
-        int zOrder
+        int zOrder,
+        TextAlignment alignment = TextAlignment::Center
     )
-        : TextRenderer(std::move(text), "", pixelSize, material, zOrder)
+        : TextRenderer(std::move(text), "", pixelSize, material, zOrder, alignment)
     {
     }
 
     ScreenTextRenderer(
         std::string text,
         unsigned int pixelSize,
-        TextMaterial* material
+        TextMaterial* material,
+        TextAlignment alignment = TextAlignment::Center
     )
-        : TextRenderer(std::move(text), "", pixelSize, material, 0)
+        : TextRenderer(std::move(text), "", pixelSize, material, 0, alignment)
     {
     }
 
@@ -123,6 +127,20 @@ public:
         const float invWidth = 1.0f / textWidth;
         const float invHeight = 1.0f / textHeight;
 
+        float alignOffset = 0.0f;
+        if (alignment == TextAlignment::Left)
+        {
+            alignOffset = 0.5f;   // Shifts origin so x = 0 is left edge of text
+        }
+        else if (alignment == TextAlignment::Right)
+        {
+            alignOffset = -0.5f;  // Shifts origin so x = 0 is right edge of text
+        }
+        else // TextAlignment::Center
+        {
+            alignOffset = 0.0f;   // Horizontal center is at origin
+        }
+
         const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
         const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
         const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
@@ -153,8 +171,8 @@ public:
             const float w = g.size.x * unit;
             const float h = g.size.y * unit;
 
-            const float x0 = (((xpos - centerX) * invWidth) * size.x + offset.x);
-            const float x1 = (((xpos + w - centerX) * invWidth) * size.x + offset.x);
+            const float x0 = (((xpos - centerX) * invWidth + alignOffset) * size.x + offset.x);
+            const float x1 = (((xpos + w - centerX) * invWidth + alignOffset) * size.x + offset.x);
             const float y0 = (((ypos - centerY) * invHeight) * size.y + offset.y);
             const float y1 = (((ypos + h - centerY) * invHeight) * size.y + offset.y);
 

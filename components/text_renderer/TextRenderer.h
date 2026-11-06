@@ -19,9 +19,16 @@
 #include "../../core/rendering/material/TextMaterial.h"
 #include "../../core/transform/Transform.h"
 
+enum class TextAlignment
+{
+    Left,
+    Center,
+    Right
+};
+
 // World-Space Text Renderer:
 // The string is laid out in the object's local XY plane, facing +Z,
-// with the baseline at y = 0 and the first glyph starting at x = 0.
+// with the baseline at y = 0 and the first glyph starting at x = 0 (Left-aligned).
 // One em (the font's pixelSize) equals one world unit at Transform scale 1.
 // Affected by camera view & projection and depth testing.
 class TextRenderer : public Component
@@ -33,19 +40,22 @@ public:
     unsigned int rasterPixelSize = 128;
     TextMaterial* material = nullptr;
     int zOrder = 0;
+    TextAlignment alignment = TextAlignment::Left;
 
     TextRenderer(
         std::string text,
         std::string fontPath,
         unsigned int pixelSize,
         TextMaterial* material,
-        int zOrder
+        int zOrder,
+        TextAlignment alignment = TextAlignment::Left
     )
         : text(std::move(text)),
           fontPath(std::move(fontPath)),
           pixelSize(pixelSize),
           material(material),
-          zOrder(zOrder)
+          zOrder(zOrder),
+          alignment(alignment)
     {
         Initialize();
     }
@@ -54,9 +64,10 @@ public:
         std::string text,
         std::string fontPath,
         unsigned int pixelSize,
-        TextMaterial* material
+        TextMaterial* material,
+        TextAlignment alignment = TextAlignment::Left
     )
-        : TextRenderer(std::move(text), std::move(fontPath), pixelSize, material, 0)
+        : TextRenderer(std::move(text), std::move(fontPath), pixelSize, material, 0, alignment)
     {
     }
 
@@ -64,18 +75,20 @@ public:
         std::string text,
         unsigned int pixelSize,
         TextMaterial* material,
-        int zOrder
+        int zOrder,
+        TextAlignment alignment = TextAlignment::Left
     )
-        : TextRenderer(std::move(text), "", pixelSize, material, zOrder)
+        : TextRenderer(std::move(text), "", pixelSize, material, zOrder, alignment)
     {
     }
 
     TextRenderer(
         std::string text,
         unsigned int pixelSize,
-        TextMaterial* material
+        TextMaterial* material,
+        TextAlignment alignment = TextAlignment::Left
     )
-        : TextRenderer(std::move(text), "", pixelSize, material, 0)
+        : TextRenderer(std::move(text), "", pixelSize, material, 0, alignment)
     {
     }
 
@@ -113,6 +126,9 @@ public:
 
     int GetZOrder() const { return zOrder; }
     void SetZOrder(int value) { zOrder = value; }
+
+    TextAlignment GetAlignment() const { return alignment; }
+    void SetAlignment(TextAlignment value) { alignment = value; }
 
     float CalculateLocalWidth(const std::string& str) const
     {
@@ -155,7 +171,22 @@ public:
         glActiveTexture(GL_TEXTURE0);
         glBindVertexArray(VAO);
 
-        float x = 0.0f;
+        float startX = 0.0f;
+        const float totalWidth = CalculateLocalWidth(text);
+        if (alignment == TextAlignment::Center)
+        {
+            startX = -0.5f * totalWidth;
+        }
+        else if (alignment == TextAlignment::Right)
+        {
+            startX = -totalWidth;
+        }
+        else // TextAlignment::Left
+        {
+            startX = 0.0f;
+        }
+
+        float x = startX;
 
         for (const char character : text)
         {
