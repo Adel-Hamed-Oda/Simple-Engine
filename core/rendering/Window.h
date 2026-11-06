@@ -15,20 +15,34 @@ public:
 		m_windowedHeight = height;
 		m_isFullscreen = fullscreen;
 
+		GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+		const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+
 		if (fullscreen)
 		{
-			GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-			if (monitor)
+			// If starting in fullscreen, prepare sensible centered windowed bounds for when toggled off
+			if (mode)
 			{
-				const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-				if (mode)
-				{
-					m_window = glfwCreateWindow(mode->width, mode->height, title, monitor, nullptr);
-				}
-				else
-				{
-					m_window = glfwCreateWindow(width, height, title, monitor, nullptr);
-				}
+				m_windowedWidth = (mode->width * 3) / 4;
+				m_windowedHeight = (mode->height * 3) / 4;
+				m_windowedX = (mode->width - m_windowedWidth) / 2;
+				m_windowedY = (mode->height - m_windowedHeight) / 2;
+			}
+			else
+			{
+				m_windowedWidth = 1280;
+				m_windowedHeight = 720;
+				m_windowedX = 100;
+				m_windowedY = 100;
+			}
+
+			if (monitor && mode)
+			{
+				m_window = glfwCreateWindow(mode->width, mode->height, title, monitor, nullptr);
+			}
+			else if (monitor)
+			{
+				m_window = glfwCreateWindow(width, height, title, monitor, nullptr);
 			}
 			else
 			{
@@ -39,11 +53,18 @@ public:
 		else
 		{
 			m_window = glfwCreateWindow(width, height, title, nullptr, nullptr);
+			if (m_window && mode)
+			{
+				m_windowedX = (mode->width - width) / 2;
+				m_windowedY = (mode->height - height) / 2;
+				glfwSetWindowPos(m_window, m_windowedX, m_windowedY);
+			}
 		}
 
-		if (m_window)
+		if (m_window && !fullscreen)
 		{
 			glfwGetWindowPos(m_window, &m_windowedX, &m_windowedY);
+			glfwGetWindowSize(m_window, &m_windowedWidth, &m_windowedHeight);
 		}
 	}
 
@@ -122,7 +143,25 @@ public:
 		}
 		else
 		{
-			// Restore previous windowed position and dimensions
+			GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+			const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+			if (mode)
+			{
+				// Ensure windowed dimensions are smaller than monitor so window borders/title bar fit comfortably
+				if (m_windowedWidth <= 0 || m_windowedHeight <= 0 ||
+				    m_windowedWidth >= mode->width || m_windowedHeight >= mode->height)
+				{
+					m_windowedWidth = (mode->width * 3) / 4;
+					m_windowedHeight = (mode->height * 3) / 4;
+					m_windowedX = (mode->width - m_windowedWidth) / 2;
+					m_windowedY = (mode->height - m_windowedHeight) / 2;
+				}
+			}
+
+			// Restore window decorations (title bar, borders)
+			glfwSetWindowAttrib(m_window, GLFW_DECORATED, GLFW_TRUE);
+
+			// Restore windowed position and dimensions
 			glfwSetWindowMonitor(
 				m_window,
 				nullptr,
@@ -130,9 +169,14 @@ public:
 				m_windowedY,
 				m_windowedWidth > 0 ? m_windowedWidth : 1280,
 				m_windowedHeight > 0 ? m_windowedHeight : 720,
-				0
+				GLFW_DONT_CARE
 			);
 		}
+	}
+
+	void ToggleFullscreen()
+	{
+		SetFullscreen(!m_isFullscreen);
 	}
 
 	void Close()
