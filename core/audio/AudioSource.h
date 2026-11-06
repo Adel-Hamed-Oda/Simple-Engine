@@ -12,6 +12,34 @@ class AudioSource
 public:
     bool loop = false;
 
+    inline static bool musicEnabled = true;
+    inline static bool sfxEnabled = true;
+
+    static bool IsMusicPath(const std::string& path, bool isLooping)
+    {
+        return isLooping || path.find("/music/") != std::string::npos || path.find("\\music\\") != std::string::npos || path.find("music") != std::string::npos;
+    }
+
+    static void SetMusicEnabled(bool enabled)
+    {
+        musicEnabled = enabled;
+        for (AudioSource* src : audioSources)
+        {
+            if (src && IsMusicPath(src->audioFilePath, src->loop))
+            {
+                if (!enabled)
+                    src->Pause();
+                else
+                    src->Resume();
+            }
+        }
+    }
+
+    static void SetSFXEnabled(bool enabled)
+    {
+        sfxEnabled = enabled;
+    }
+
     static bool Init()
     {
         if (engineInitialized)
@@ -83,6 +111,12 @@ public:
 
     void Play()
     {
+        const bool isMusic = IsMusicPath(audioFilePath, loop);
+        if (isMusic && !musicEnabled)
+            return;
+        if (!isMusic && !sfxEnabled)
+            return;
+
         if (!engineInitialized && !Init())
             return;
 
